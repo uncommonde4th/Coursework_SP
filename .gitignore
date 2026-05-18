@@ -1,0 +1,35 @@
+
+# Build directories
+build/
+cmake-build-*/
+*.o
+*.so
+*.a
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Database files
+*.dat
+*.idx
+*.db
+data/
+
+# Executable
+sysdb
+*.exe
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+*.tmp
+
+# Test outputs
+test_*
+*.test
