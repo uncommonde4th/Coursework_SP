@@ -1,3 +1,0 @@
-/home/uncommonde4th/Projects/Coursework_SP/CMakeFiles/sysdb.dir
-/home/uncommonde4th/Projects/Coursework_SP/CMakeFiles/edit_cache.dir
-/home/uncommonde4th/Projects/Coursework_SP/CMakeFiles/rebuild_cache.dir

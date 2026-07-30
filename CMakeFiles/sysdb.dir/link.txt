@@ -1,1 +1,0 @@
-/usr/bin/c++  -Wall -Wextra -Wpedantic -g -Wl,--dependency-file=CMakeFiles/sysdb.dir/link.d CMakeFiles/sysdb.dir/src/btree/src/bplus_tree.cpp.o CMakeFiles/sysdb.dir/src/record/src/heap_file.cpp.o CMakeFiles/sysdb.dir/src/record/src/page.cpp.o CMakeFiles/sysdb.dir/src/record/src/record_manager.cpp.o CMakeFiles/sysdb.dir/main.cpp.o -o sysdb  -lpthread
