@@ -107,26 +107,44 @@ void test_record_manager() {
 }
 
 void test_bplus_tree() {
-    std::cout << "\n=== Testing BPlusTree ===" << std::endl;
+    std::cout << "\n=== Testing BPlusTree (persistent) ===" << std::endl;
     
     BPlusTree tree("test_index", Value::Type::INT);
+    if (!tree.initialize()) {
+        std::cerr << "Failed to initialize BPlusTree" << std::endl;
+        return;
+    }
     
-    // Вставляем значения
-    tree.insert(Value::make_int(5), RecordId(0, 0));
-    tree.insert(Value::make_int(3), RecordId(0, 1));
-    tree.insert(Value::make_int(7), RecordId(0, 2));
-    tree.insert(Value::make_int(5), RecordId(1, 0));  // Дубликат
+    // Вставляем много значений, чтобы спровоцировать split узлов
+    for (int i = 0; i < 500; i++) {
+        tree.insert(Value::make_int(i), RecordId(0, static_cast<uint16_t>(i)));
+    }
     
-    // Ищем
-    auto found = tree.find(Value::make_int(5));
-    std::cout << "Found " << found.size() << " records with key 5" << std::endl;
+    auto found = tree.find(Value::make_int(250));
+    std::cout << "Found " << found.size() << " records with key 250" << std::endl;
     for (const auto& rid : found) {
         std::cout << "  " << rid.to_string() << std::endl;
     }
     
-    // Ищем несуществующий
-    auto not_found = tree.find(Value::make_int(10));
-    std::cout << "Found " << not_found.size() << " records with key 10" << std::endl;
+    auto not_found = tree.find(Value::make_int(999));
+    std::cout << "Found " << not_found.size() << " records with key 999" << std::endl;
+    
+    auto range = tree.range_find(Value::make_int(100), Value::make_int(110));
+    std::cout << "Range [100, 110): " << range.size() << " records" << std::endl;
+    
+    // Удаляем часть значений, включая перестроение через borrow/merge
+    for (int i = 0; i < 300; i++) {
+        tree.remove(Value::make_int(i), RecordId(0, static_cast<uint16_t>(i)));
+    }
+    
+    auto after_delete = tree.find(Value::make_int(250));
+    std::cout << "After deleting [0,300): found " << after_delete.size()
+              << " records with key 250 (expected 0)" << std::endl;
+    
+    auto still_there = tree.find(Value::make_int(450));
+    std::cout << "Key 450 still present: " << still_there.size() << " record(s)" << std::endl;
+    
+    tree.flush();
 }
 
 int main(int argc, char* argv[]) {

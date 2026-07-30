@@ -180,6 +180,8 @@ void HeapFile::load_all_pages() {
             page_cache_[i] = page;
         }
     }
+    
+    next_page_id_ = static_cast<uint32_t>(page_count);
 }
 
 Page* HeapFile::get_page(uint32_t page_id) {
@@ -207,8 +209,9 @@ const Page* HeapFile::get_page(uint32_t page_id) const {
 }
 
 uint32_t HeapFile::allocate_new_page() {
-    // Просто возвращаем следующий ID
-    return page_cache_.size();
+    // Опираемся на реальный счётчик страниц на диске, а не на размер кэша:
+    // кэш может не содержать всех страниц (например, при ленивой загрузке).
+    return next_page_id_++;
 }
 
 }
