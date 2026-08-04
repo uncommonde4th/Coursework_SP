@@ -86,6 +86,56 @@ public:
         return true;
     }
 
+    void dropTable(const std::string& db, const std::string& table) {
+        auto db_it = databases_.find(db);
+        if (db_it != databases_.end()) {
+            db_it->second.erase(table);
+            std::cout << "[STORAGE] Table '" << table << "' dropped from '" << db << "'." << std::endl;
+        }
+    }
+
+    void deleteRows(const std::string& /*db*/, const std::string& table, const Condition& cond) {
+        std::cout << "[STORAGE] Deleting rows from '" << table << "' where "
+                  << cond.column << " " << cond.op << " ";
+
+        if (cond.value.type == Value::INT_VAL) {
+            std::cout << cond.value.int_value;
+        } else {
+            std::cout << cond.value.string_value;
+        }
+        std::cout << std::endl;
+    }
+
+    void updateRows(const std::string& /*db*/, const std::string& table,
+                    const std::vector<std::pair<std::string, Value>>& sets,
+                    const Condition& cond) {
+        std::cout << "[STORAGE] Updating '" << table << "' SET ";
+        for (size_t i = 0; i < sets.size(); ++i) {
+            if (i > 0) std::cout << ", ";
+            std::cout << sets[i].first << " = ";
+
+            if (sets[i].second.type == Value::INT_VAL) {
+                std::cout << sets[i].second.int_value;
+            } else {
+                std::cout << sets[i].second.string_value;
+            }
+        }
+
+        if (!cond.op.empty()) {
+            std::cout << " WHERE " << cond.column << " " << cond.op << " ";
+            if (cond.value.type == Value::INT_VAL) {
+                std::cout << cond.value.int_value;
+            } else {
+                std::cout << cond.value.string_value;
+            }
+        } else {
+            std::cout << " (all rows)";
+        }
+        std::cout << std::endl;
+    }
+
+
+
 private:
     std::string current_db_;
     // Map<DatabaseName, Map<TableName, Columns>>

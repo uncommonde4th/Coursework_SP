@@ -11,36 +11,44 @@ int main() {
     StorageStub storage;
     Parser parser(storage);
 
-    // 1. Подготовка
+    // Подготовка
     parser.parse(Tokenizer("CREATE DATABASE test_db;").tokenize());
     parser.parse(Tokenizer("USE test_db;").tokenize());
     parser.parse(Tokenizer("CREATE TABLE users (id INT NOT_NULL INDEXED, name STRING, age INT);").tokenize());
+    parser.parse(Tokenizer("INSERT INTO users VALUE (1, \"Alice\", 25), (2, \"Bob\", 30);").tokenize());
 
-    // 2. Тест INSERT
-    std::string q = "INSERT INTO users VALUE (1, \"Alice\", 25), (2, \"Bob\", 30);";
-    std::cout << "\nQuery: " << q << std::endl;
+    // Тест DROP TABLE
+    std::cout << "\n--- Test DROP TABLE ---" << std::endl;
+    parser.parse(Tokenizer("DROP TABLE users;").tokenize());
+    if (parser.hasError()) std::cerr << "Error: " << parser.getError() << std::endl;
 
-    auto cmd = parser.parse(Tokenizer(q).tokenize());
+    // Тест DELETE
+    std::cout << "\n--- Test DELETE ---" << std::endl;
+    // Сначала пересоздадим таблицу, так как мы её удалили
+    parser.parse(Tokenizer("CREATE TABLE users (id INT NOT_NULL INDEXED, name STRING, age INT);").tokenize());
 
-    if (parser.hasError()) {
-        std::cerr << "Error: " << parser.getError() << std::endl;
-    } else if (cmd) {
-        // Проверяем тип команды, чтобы вывести правильное сообщение
-        if (cmd->getType() == CommandType::INSERT) {
-            std::cout << "Success! Parsed INSERT command." << std::endl;
-        }
-    }
+    std::string del_q = "DELETE FROM users WHERE id == 1;";
+    std::cout << "Query: " << del_q << std::endl;
+    parser.parse(Tokenizer(del_q).tokenize());
+    if (parser.hasError()) std::cerr << "Error: " << parser.getError() << std::endl;
 
-    // 3. Тест ошибки (нарушение NOT_NULL)
-    std::string q_err = "INSERT INTO users VALUE (NULL, \"Charlie\", 20);";
-    std::cout << "\nQuery (should fail): " << q_err << std::endl;
+    // Тест UPDATE
+    std::cout << "\n--- Test UPDATE ---" << std::endl;
+    std::string upd_q = "UPDATE users SET age = 26, name = \"Alice Updated\" WHERE id == 1;";
+    std::cout << "Query: " << upd_q << std::endl;
+    parser.parse(Tokenizer(upd_q).tokenize());
+    if (parser.hasError()) std::cerr << "Error: " << parser.getError() << std::endl;
 
-    auto cmd_err = parser.parse(Tokenizer(q_err).tokenize());
+    std::cout << "\n--- Test SELECT ---" << std::endl;
+    std::string sel_q = "SELECT id, name AS user_name, age FROM users;";
+    std::cout << "Query: " << sel_q << std::endl;
+    parser.parse(Tokenizer(sel_q).tokenize());
+    if (parser.hasError()) std::cerr << "Error: " << parser.getError() << std::endl;
 
-    if (parser.hasError()) {
-        std::cerr << "Caught Error: " << parser.getError() << std::endl;
-    } else if (!cmd_err) {
-        std::cerr << "Caught Error: Command returned null without error message." << std::endl;
-    }
+    std::string sel_star = "SELECT * FROM users;";
+    std::cout << "Query: " << sel_star << std::endl;
+    parser.parse(Tokenizer(sel_star).tokenize());
+    if (parser.hasError()) std::cerr << "Error: " << parser.getError() << std::endl;
+
     return 0;
 }

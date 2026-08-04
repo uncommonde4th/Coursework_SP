@@ -14,7 +14,11 @@ namespace sysdb {
         DROP_DATABASE,
         USE_DATABASE,
         CREATE_TABLE,
+        DROP_TABLE,
         INSERT,
+        DELETE_CMD,
+        UPDATE_CMD,
+        SELECT_CMD,
         UNKNOWN
     };
 
@@ -72,6 +76,50 @@ namespace sysdb {
         std::vector<std::vector<Value>> rows;  // Несколько кортежей значений
 
         CommandType getType() const override { return CommandType::INSERT; }
+    };
+
+    struct DropTableCmd : public Command {
+        std::string table_name;
+        CommandType getType() const override { return CommandType::DROP_TABLE; }
+    };
+
+    // Простая структура для условия WHERE (пока только одно сравнение)
+    struct Condition {
+        std::string column;
+        std::string op; // "==", "!=", "<", ">", "<=", ">="
+        Value value;
+    };
+
+    struct DeleteCmd : public Command {
+        std::string table_name;
+        Condition where; // Условие удаления
+        bool has_where = false; // Флаг наличия WHERE
+
+        CommandType getType() const override { return CommandType::DELETE_CMD; }
+    };
+
+    struct UpdateCmd : public Command {
+        std::string table_name;
+        std::vector<std::pair<std::string, Value>> set_clause;
+        Condition where;
+        bool has_where = false;
+
+        CommandType getType() const override { return CommandType::UPDATE_CMD; }
+    };
+
+    struct SelectColumn {
+        std::string name;
+        std::string alias; // Может быть пустым
+        bool is_star = false; // Флаг для SELECT *
+    };
+
+    struct SelectCmd : public Command {
+        std::string table_name;
+        std::vector<SelectColumn> columns;
+        Condition where;
+        bool has_where = false;
+
+        CommandType getType() const override { return CommandType::SELECT_CMD; }
     };
 
     using CommandPtr = std::unique_ptr<Command>;
