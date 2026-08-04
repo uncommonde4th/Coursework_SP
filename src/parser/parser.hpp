@@ -37,6 +37,8 @@ namespace sysdb {
         CommandPtr parseCreateDatabase();
         CommandPtr parseDropDatabase();
         CommandPtr parseUseDatabase();
+        CommandPtr parseCreateTable();
+        CommandPtr parseInsert();
     };
 
 } // namespace sysdb
