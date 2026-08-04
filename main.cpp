@@ -1,24 +1,44 @@
 #include <iostream>
 #include <string>
-#include "cli/cli.hpp"
+#include "parser/tokenizer.hpp"
+#include "parser/parser.hpp"
+#include "storage_stub.hpp"
 
-int main(int argc, char* argv[]) {
-    CLI cli;
+using namespace sysdb;
 
-    if (argc == 1) {
-        // Интерактивный режим (без аргументов)
-        cli.runInteractive();
-    } else if (argc == 2) {
-        // Пакетный режим (один аргумент - имя файла)
-        std::string filename = argv[1];
-        cli.runBatchMode(filename);
-    } else {
-        // Ошибка: слишком много аргументов
-        std::cerr << "Usage:" << std::endl;
-        std::cerr << "  Interactive mode: ./sysdb" << std::endl;
-        std::cerr << "  Batch mode:       ./sysdb <script_file>" << std::endl;
-        return 1;
+int main() {
+    StorageStub storage;
+    Parser parser(storage);
+
+    std::cout << "=== Parser Test ===" << std::endl;
+
+    // Тест 1: CREATE DATABASE
+    std::string query1 = "CREATE DATABASE my_db;";
+    std::cout << "\nQuery: " << query1 << std::endl;
+
+    Tokenizer tok1(query1);
+    auto tokens1 = tok1.tokenize();
+    if (!tok1.hasError()) {
+        auto cmd = parser.parse(tokens1);
+        if (parser.hasError()) {
+            std::cerr << "Error: " << parser.getError() << std::endl;
+        } else if (cmd) {
+            std::cout << "Success! Parsed CREATE DATABASE for: " << static_cast<CreateDatabaseCmd*>(cmd.get())->name << std::endl;
+        }
     }
-    
+
+    // Тест 2: USE несуществующей БД (ошибка семантики)
+    std::string query2 = "USE nonexistent_db;";
+    std::cout << "\nQuery: " << query2 << std::endl;
+
+    Tokenizer tok2(query2);
+    auto tokens2 = tok2.tokenize();
+    if (!tok2.hasError()) {
+        auto cmd = parser.parse(tokens2);
+        if (parser.hasError()) {
+            std::cerr << "Error: " << parser.getError() << std::endl;
+        }
+    }
+
     return 0;
 }

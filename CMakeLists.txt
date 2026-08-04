@@ -19,8 +19,12 @@ file(GLOB_RECURSE SOURCES
 list(APPEND SOURCES main.cpp)
 
 # Создаем исполняемый файл
-add_executable(sysdb main.cpp src/cli/cli.cpp
-        src/cli/cli.cpp)
+add_executable(sysdb
+        main.cpp
+        src/cli/cli.cpp
+        src/parser/tokenizer.cpp
+        src/parser/parser.cpp
+)
 
 # Добавляем include директории
 target_include_directories(sysdb PRIVATE 
