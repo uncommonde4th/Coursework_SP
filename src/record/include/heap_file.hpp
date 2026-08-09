@@ -47,6 +47,7 @@ private:
     std::string filename_;
     int fd_;
     mutable std::mutex mutex_;
+    uint32_t next_page_id_ = 0;   // счётчик страниц на диске (не зависит от кэша)
     
     // Кэш страниц (простая реализация без LRU для начала)
     mutable std::unordered_map<uint32_t, Page> page_cache_;
