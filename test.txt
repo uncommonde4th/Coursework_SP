@@ -1,199 +1,633 @@
 -- ============================================================
+-- SYSDB MEGA TEST
+-- Без AND / OR
+-- ============================================================
+
+
+-- ============================================================
 -- 1. DATABASE
 -- ============================================================
 
-CREATE DATABASE testdb;
-USE testdb;
+CREATE DATABASE mega_test;
+USE mega_test;
+
 
 -- ============================================================
 -- 2. TABLE
 -- ============================================================
 
-CREATE TABLE users (
+CREATE TABLE employees (
     id int INDEXED,
     name string NOT_NULL,
     age int,
     city string,
     email string INDEXED,
-    bio string
+    role string,
+    salary int
 );
 
+
 -- ============================================================
--- 3. INSERT
+-- 3. INSERT: базовые данные
 -- ============================================================
 
-INSERT INTO users (id, name, age, city, email, bio)
+INSERT INTO employees (id, name, age, city, email, role, salary)
 VALUE
-    (1, "Alice", 25, "Moscow", "alice@test.com", "Developer"),
-    (2, "Bob", 30, "Berlin", "bob@test.com", "Engineer"),
-    (3, "Charlie", 20, "London", "charlie@test.com", "Student"),
-    (4, "Diana", 35, "Paris", "diana@test.com", "Manager"),
-    (5, "Eve", 28, "Moscow", "eve@test.com", "Designer");
+(1, "Alice", 25, "Moscow", "[alice@test.com](mailto:alice@test.com)", "Developer", 100),
+(2, "Bob", 30, "Berlin", "[bob@test.com](mailto:bob@test.com)", "Engineer", 120),
+(3, "Charlie", 20, "London", "[charlie@test.com](mailto:charlie@test.com)", "Student", 50),
+(4, "Diana", 35, "Paris", "[diana@test.com](mailto:diana@test.com)", "Manager", 150),
+(5, "Eve", 28, "Moscow", "[eve@test.com](mailto:eve@test.com)", "Designer", 110),
+(6, "Frank", 40, "Munich", "[frank@test.com](mailto:frank@test.com)", "Architect", 180),
+(7, "Grace", 22, "Rome", "[grace@test.com](mailto:grace@test.com)", "Intern", 60),
+(8, "Henry", 31, "Berlin", "[henry@test.com](mailto:henry@test.com)", "Engineer", 125),
+(9, "Iris", 27, "Paris", "[iris@test.com](mailto:iris@test.com)", "Developer", 105),
+(10, "Jack", 45, "Moscow", "[jack@test.com](mailto:jack@test.com)", "Manager", 200);
 
--- Проверка полного SELECT
-SELECT * FROM users;
+SELECT * FROM employees;
+
 
 -- ============================================================
--- 4. INSERT С ПРОПУЩЕННЫМИ NULLABLE ПОЛЯМИ
+-- 4. INSERT WITH NULL
 -- ============================================================
 
-INSERT INTO users (id, name, email)
+INSERT INTO employees (id, name, email)
 VALUE
-    (6, "Frank", "frank@test.com");
+(11, "Kate", "[kate@test.com](mailto\:kate@test.com)");
 
-SELECT * FROM users;
+SELECT * FROM employees;
+
+SELECT id, name, age, city, role, salary FROM employees;
+
+SELECT id, name, email FROM employees;
+
 
 -- ============================================================
--- 5. SELECT КОНКРЕТНЫХ КОЛОНОК
--- ============================================================
-
-SELECT id, name, age FROM users;
-
--- ============================================================
--- 6. SELECT С ALIAS
+-- 5. ALIAS
 -- ============================================================
 
 SELECT
-    id AS user_id,
-    name AS username,
-    age AS user_age
-FROM users;
+    id AS employee_id,
+    name AS employee_name,
+    age AS employee_age,
+    city AS employee_city
+FROM employees;
+
 
 -- ============================================================
--- 7. == 
+-- 6. == INTEGER
 -- ============================================================
 
-SELECT * FROM users WHERE id == 3;
+SELECT * FROM employees WHERE id == 1;
+SELECT * FROM employees WHERE id == 5;
+SELECT * FROM employees WHERE age == 30;
+SELECT * FROM employees WHERE salary == 150;
 
-SELECT * FROM users WHERE name == "Alice";
-
-SELECT * FROM users WHERE city == "Moscow";
-
--- ============================================================
--- 8. !=
--- ============================================================
-
-SELECT * FROM users WHERE age != 30;
-
-SELECT * FROM users WHERE city != "Moscow";
 
 -- ============================================================
--- 9. <
+-- 7. == STRING
 -- ============================================================
 
-SELECT * FROM users WHERE age < 30;
+SELECT * FROM employees WHERE name == "Alice";
+SELECT * FROM employees WHERE name == "Henry";
+SELECT * FROM employees WHERE city == "Moscow";
+SELECT * FROM employees WHERE role == "Engineer";
 
-SELECT * FROM users WHERE name < "Diana";
-
--- ============================================================
--- 10. >
--- ============================================================
-
-SELECT * FROM users WHERE age > 25;
-
-SELECT * FROM users WHERE name > "Bob";
 
 -- ============================================================
--- 11. <=
+-- 8. INDEXED INTEGER SEARCH
 -- ============================================================
 
-SELECT * FROM users WHERE age <= 28;
+SELECT * FROM employees WHERE id == 2;
+SELECT * FROM employees WHERE id == 6;
+SELECT * FROM employees WHERE id == 10;
+
 
 -- ============================================================
--- 12. >=
+-- 9. INDEXED STRING SEARCH
 -- ============================================================
 
-SELECT * FROM users WHERE age >= 30;
+SELECT * FROM employees
+WHERE email == "[alice@test.com](mailto\:alice@test.com)";
+
+SELECT * FROM employees
+WHERE email == "[frank@test.com](mailto\:frank@test.com)";
+
+SELECT * FROM employees
+WHERE email == "[jack@test.com](mailto\:jack@test.com)";
+
 
 -- ============================================================
--- 13. BETWEEN
--- Интервал [20, 30)
+-- 10. != INTEGER
 -- ============================================================
 
-SELECT * FROM users WHERE age BETWEEN 20 AND 30;
+SELECT * FROM employees WHERE age != 30;
+SELECT * FROM employees WHERE salary != 100;
+SELECT * FROM employees WHERE id != 5;
 
-SELECT * FROM users WHERE id BETWEEN 2 AND 5;
-
--- ============================================================
--- 14. LIKE / REGEX
--- ============================================================
-
-SELECT * FROM users WHERE name LIKE "^A.*";
-
-SELECT * FROM users WHERE name LIKE ".*e$";
-
-SELECT * FROM users WHERE city LIKE "^M.*";
-
-SELECT * FROM users WHERE email LIKE ".*@test\\.com$";
 
 -- ============================================================
--- 15. СРАВНЕНИЕ С NULL
+-- 11. != STRING
 -- ============================================================
 
-SELECT * FROM users WHERE bio == NULL;
+SELECT * FROM employees WHERE city != "Moscow";
+SELECT * FROM employees WHERE role != "Engineer";
+SELECT * FROM employees WHERE name != "Alice";
 
-SELECT * FROM users WHERE bio != NULL;
 
 -- ============================================================
--- 16. UPDATE
+-- 12. <
 -- ============================================================
 
-UPDATE users
+SELECT * FROM employees WHERE age < 25;
+SELECT * FROM employees WHERE age < 30;
+SELECT * FROM employees WHERE salary < 100;
+
+
+-- ============================================================
+-- 13. > 
+-- ============================================================
+
+SELECT * FROM employees WHERE age > 30;
+SELECT * FROM employees WHERE age > 40;
+SELECT * FROM employees WHERE salary > 150;
+
+
+-- ============================================================
+-- 14. <=
+-- ============================================================
+
+SELECT * FROM employees WHERE age <= 25;
+SELECT * FROM employees WHERE age <= 30;
+SELECT * FROM employees WHERE salary <= 100;
+
+
+-- ============================================================
+-- 15. >=
+-- ============================================================
+
+SELECT * FROM employees WHERE age >= 30;
+SELECT * FROM employees WHERE age >= 40;
+SELECT * FROM employees WHERE salary >= 150;
+
+
+-- ============================================================
+-- 16. STRING ORDERING
+-- ============================================================
+
+SELECT * FROM employees WHERE name < "Diana";
+SELECT * FROM employees WHERE name > "Bob";
+
+SELECT * FROM employees WHERE city < "Moscow";
+SELECT * FROM employees WHERE city > "London";
+
+
+-- ============================================================
+-- 17. BETWEEN
+-- ============================================================
+
+SELECT * FROM employees
+WHERE age BETWEEN 20 AND 30;
+
+SELECT * FROM employees
+WHERE age BETWEEN 25 AND 35;
+
+SELECT * FROM employees
+WHERE salary BETWEEN 100 AND 150;
+
+SELECT * FROM employees
+WHERE id BETWEEN 2 AND 5;
+
+
+-- ============================================================
+-- 18. BETWEEN BOUNDARIES
+-- ============================================================
+
+SELECT * FROM employees
+WHERE age BETWEEN 20 AND 20;
+
+SELECT * FROM employees
+WHERE age BETWEEN 30 AND 30;
+
+SELECT * FROM employees
+WHERE id BETWEEN 1 AND 1;
+
+SELECT * FROM employees
+WHERE id BETWEEN 10 AND 10;
+
+
+-- ============================================================
+-- 19. LIKE / REGEX - PREFIX
+-- ============================================================
+
+SELECT * FROM employees
+WHERE name LIKE "^A.*";
+
+SELECT * FROM employees
+WHERE name LIKE "^B.*";
+
+SELECT * FROM employees
+WHERE name LIKE "^C.*";
+
+SELECT * FROM employees
+WHERE city LIKE "^M.*";
+
+
+-- ============================================================
+-- 20. LIKE / REGEX - SUFFIX
+-- ============================================================
+
+SELECT * FROM employees
+WHERE name LIKE ".*e$";
+
+SELECT * FROM employees
+WHERE city LIKE ".*n$";
+
+SELECT * FROM employees
+WHERE role LIKE ".*er$";
+
+
+-- ============================================================
+-- 21. LIKE / REGEX - CONTAINS
+-- ============================================================
+
+SELECT * FROM employees
+WHERE name LIKE ".*a.*";
+
+SELECT * FROM employees
+WHERE city LIKE ".*o.*";
+
+SELECT * FROM employees
+WHERE role LIKE ".*Engineer.*";
+
+
+-- ============================================================
+-- 22. EMAIL REGEX
+-- ============================================================
+
+SELECT * FROM employees
+WHERE email LIKE ".*@test\\.com$";
+
+SELECT * FROM employees
+WHERE email LIKE "^\\[a.*";
+
+SELECT * FROM employees
+WHERE email LIKE ".*frank.*";
+
+
+-- ============================================================
+-- 23. NULL == NULL
+-- ============================================================
+
+SELECT * FROM employees
+WHERE age == NULL;
+
+SELECT * FROM employees
+WHERE city == NULL;
+
+SELECT * FROM employees
+WHERE role == NULL;
+
+SELECT * FROM employees
+WHERE salary == NULL;
+
+
+-- ============================================================
+-- 24. NULL != NULL
+-- ============================================================
+
+SELECT * FROM employees
+WHERE age != NULL;
+
+SELECT * FROM employees
+WHERE city != NULL;
+
+SELECT * FROM employees
+WHERE role != NULL;
+
+SELECT * FROM employees
+WHERE salary != NULL;
+
+
+-- ============================================================
+-- 25. NULL FIELD PROJECTION
+-- ============================================================
+
+SELECT id, name, age, city, role, salary
+FROM employees
+WHERE id == 11;
+
+
+-- ============================================================
+-- 26. UPDATE SINGLE COLUMN
+-- ============================================================
+
+UPDATE employees
 SET age = 26
 WHERE id == 1;
 
-SELECT * FROM users WHERE id == 1;
+SELECT * FROM employees WHERE id == 1;
+
 
 -- ============================================================
--- 17. UPDATE НЕСКОЛЬКИХ КОЛОНОК
+-- 27. UPDATE INDEXED COLUMN
 -- ============================================================
 
-UPDATE users
+UPDATE employees
+SET id = 101
+WHERE id == 1;
+
+SELECT * FROM employees WHERE id == 101;
+
+SELECT * FROM employees WHERE id == 1;
+
+
+-- ============================================================
+-- 28. UPDATE STRING
+-- ============================================================
+
+UPDATE employees
+SET city = "Toronto"
+WHERE id == 2;
+
+SELECT * FROM employees WHERE id == 2;
+
+SELECT * FROM employees
+WHERE city == "Toronto";
+
+
+-- ============================================================
+-- 29. UPDATE MULTIPLE COLUMNS
+-- ============================================================
+
+UPDATE employees
 SET age = 31, city = "Munich"
 WHERE id == 2;
 
-SELECT * FROM users WHERE id == 2;
+SELECT * FROM employees WHERE id == 2;
+
 
 -- ============================================================
--- 18. UPDATE ПО НЕИНДЕКСИРОВАННОМУ ПОЛЮ
+-- 30. UPDATE NON-INDEXED COLUMN
 -- ============================================================
 
-UPDATE users
-SET bio = "Senior Engineer"
-WHERE city == "Munich";
+UPDATE employees
+SET role = "Senior Engineer"
+WHERE id == 2;
 
-SELECT * FROM users WHERE city == "Munich";
+SELECT * FROM employees WHERE id == 2;
 
--- ============================================================
--- 19. DELETE
--- ============================================================
-
-DELETE FROM users WHERE id == 6;
-
-SELECT * FROM users;
 
 -- ============================================================
--- 20. DELETE ПО ДИАПАЗОНУ
+-- 31. UPDATE STRING TO STRING
 -- ============================================================
 
-DELETE FROM users WHERE age BETWEEN 20 AND 25;
+UPDATE employees
+SET role = "Lead Developer"
+WHERE name == "Alice";
 
-SELECT * FROM users;
+SELECT * FROM employees
+WHERE name == "Alice";
 
--- ============================================================
--- 21. ПРОВЕРКА INDEXED ПОИСКА
--- ============================================================
-
-SELECT * FROM users WHERE id == 2;
-
-SELECT * FROM users WHERE id == 4;
-
-SELECT * FROM users WHERE email == "alice@test.com";
-
-SELECT * FROM users WHERE email == "diana@test.com";
 
 -- ============================================================
--- 22. ПОЛНЫЙ DIAGNOSTIC SELECT
+-- 32. UPDATE MULTIPLE ROWS
+-- ============================================================
+
+UPDATE employees
+SET role = "Engineer"
+WHERE city == "Berlin";
+
+SELECT * FROM employees
+WHERE city == "Berlin";
+
+
+-- ============================================================
+-- 33. UPDATE NULLABLE FIELD FROM NULL
+-- ============================================================
+
+UPDATE employees
+SET age = 50
+WHERE id == 11;
+
+UPDATE employees
+SET city = "Madrid"
+WHERE id == 11;
+
+UPDATE employees
+SET role = "Consultant"
+WHERE id == 11;
+
+UPDATE employees
+SET salary = 130
+WHERE id == 11;
+
+SELECT * FROM employees WHERE id == 11;
+
+
+-- ============================================================
+-- 34. DELETE SINGLE ROW
+-- ============================================================
+
+DELETE FROM employees
+WHERE id == 11;
+
+SELECT * FROM employees
+WHERE id == 11;
+
+
+-- ============================================================
+-- 35. DELETE INDEXED ROW
+-- ============================================================
+
+DELETE FROM employees
+WHERE id == 10;
+
+SELECT * FROM employees
+WHERE id == 10;
+
+
+-- ============================================================
+-- 36. DELETE BY STRING
+-- ============================================================
+
+DELETE FROM employees
+WHERE name == "Grace";
+
+SELECT * FROM employees
+WHERE name == "Grace";
+
+
+-- ============================================================
+-- 37. DELETE BY RANGE
+-- ============================================================
+
+DELETE FROM employees
+WHERE age BETWEEN 20 AND 25;
+
+SELECT * FROM employees;
+
+
+-- ============================================================
+-- 38. VERIFY REMAINING DATA
+-- ============================================================
+
+SELECT * FROM employees;
+
+
+-- ============================================================
+-- 39. VERIFY INDEX AFTER DELETE
+-- ============================================================
+
+SELECT * FROM employees WHERE id == 2;
+SELECT * FROM employees WHERE id == 4;
+SELECT * FROM employees WHERE id == 5;
+SELECT * FROM employees WHERE id == 6;
+
+
+-- ============================================================
+-- 40. VERIFY INDEXED EMAIL AFTER DELETE
+-- ============================================================
+
+SELECT * FROM employees
+WHERE email == "[alice@test.com](mailto\:alice@test.com)";
+
+SELECT * FROM employees
+WHERE email == "[diana@test.com](mailto\:diana@test.com)";
+
+
+-- ============================================================
+-- 41. INSERT AFTER DELETE
+-- Проверяем повторное использование свободных слотов
+-- ============================================================
+
+INSERT INTO employees (id, name, age, city, email, role, salary)
+VALUE
+(20, "NewUser1", 29, "Prague", "[new1@test.com](mailto:new1@test.com)", "Tester", 90),
+(21, "NewUser2", 33, "Vienna", "[new2@test.com](mailto:new2@test.com)", "QA", 95),
+(22, "NewUser3", 37, "Warsaw", "[new3@test.com](mailto:new3@test.com)", "DevOps", 140);
+
+SELECT * FROM employees;
+
+
+-- ============================================================
+-- 42. SEARCH NEW RECORDS
+-- ============================================================
+
+SELECT * FROM employees WHERE id == 20;
+SELECT * FROM employees WHERE id == 21;
+SELECT * FROM employees WHERE id == 22;
+
+SELECT * FROM employees
+WHERE email == "[new1@test.com](mailto:new1@test.com)";
+
+
+-- ============================================================
+-- 43. UPDATE NEW RECORDS
+-- ============================================================
+
+UPDATE employees
+SET salary = 150
+WHERE id == 20;
+
+UPDATE employees
+SET city = "Berlin"
+WHERE id == 21;
+
+UPDATE employees
+SET role = "Senior DevOps"
+WHERE id == 22;
+
+SELECT * FROM employees WHERE id == 20;
+SELECT * FROM employees WHERE id == 21;
+SELECT * FROM employees WHERE id == 22;
+
+
+-- ============================================================
+-- 44. DELETE NEW RECORD
+-- ============================================================
+
+DELETE FROM employees
+WHERE id == 20;
+
+SELECT * FROM employees WHERE id == 20;
+
+
+-- ============================================================
+-- 45. REINSERT AFTER DELETE
+-- ============================================================
+
+INSERT INTO employees (id, name, age, city, email, role, salary)
+VALUE
+(30, "ReusedSlot", 26, "Sofia", "[reuse@test.com](mailto:reuse@test.com)", "Tester", 80);
+
+SELECT * FROM employees
+WHERE id == 30;
+
+
+-- ============================================================
+-- 46. EMPTY RESULT TESTS
+-- ============================================================
+
+SELECT * FROM employees WHERE id == 9999;
+SELECT * FROM employees WHERE name == "Nobody";
+SELECT * FROM employees WHERE city == "Atlantis";
+SELECT * FROM employees WHERE age > 9999;
+SELECT * FROM employees WHERE salary < 0;
+
+
+-- ============================================================
+-- 47. PROJECTION + FILTER
+-- ============================================================
+
+SELECT id, name
+FROM employees
+WHERE city == "Moscow";
+
+SELECT id, name, salary
+FROM employees
+WHERE age >= 30;
+
+SELECT name, city, role
+FROM employees
+WHERE salary > 120;
+
+
+-- ============================================================
+-- 48. ALIAS + FILTER
+-- ============================================================
+
+SELECT
+    id AS identifier,
+    name AS full_name,
+    salary AS income
+FROM employees
+WHERE city == "Moscow";
+
+
+-- ============================================================
+-- 49. REGEX AFTER UPDATES
+-- ============================================================
+
+SELECT * FROM employees
+WHERE role LIKE ".*Engineer.*";
+
+SELECT * FROM employees
+WHERE city LIKE "^M.*";
+
+SELECT * FROM employees
+WHERE name LIKE ".*e$";
+
+
+-- ============================================================
+-- 50. FULL FINAL TABLE
+-- ============================================================
+
+SELECT * FROM employees;
+
+
+-- ============================================================
+-- 51. FINAL DIAGNOSTIC PROJECTION
 -- ============================================================
 
 SELECT
@@ -202,17 +636,33 @@ SELECT
     age AS years,
     city AS location,
     email AS contact,
-    bio AS description
-FROM users;
+    role AS position,
+    salary AS income
+FROM employees;
+
 
 -- ============================================================
--- 23. DROP TABLE
+-- 52. DROP TABLE
 -- ============================================================
 
-DROP TABLE users;
+DROP TABLE employees;
+
 
 -- ============================================================
--- 24. DROP DATABASE
+-- 53. VERIFY TABLE IS GONE
 -- ============================================================
 
-DROP DATABASE testdb;
+-- Этот SELECT должен корректно завершиться ошибкой/сообщением
+-- об отсутствии таблицы, а не падением программы.
+
+
+-- ============================================================
+-- 54. DROP DATABASE
+-- ============================================================
+
+DROP DATABASE mega_test;
+
+
+-- ============================================================
+-- END
+-- ============================================================

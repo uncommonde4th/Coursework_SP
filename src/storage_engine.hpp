@@ -250,15 +250,15 @@ public:
         for (const auto& rid : rids) {
             auto row = t->records->get_record(rid, makeSchema(*t));
             if (row.empty()) continue;
+            if (!t->records->delete_record(rid)) {
+                setError("Failed to delete record");
+                return false;
+            }
             for (const auto& col : t->columns) {
                 if (col.indexed) {
                     int idx = columnIndex(*t, col.name);
                     t->indexes[col.name]->remove(row[idx], rid);
                 }
-            }
-            if (!t->records->delete_record(rid)) {
-                setError("Failed to delete record");
-                return false;
             }
         }
         flushTable(db, table);
@@ -294,6 +294,12 @@ public:
                     return false;
                 }
             }
+            if (!t->records->update_record(rid, new_row, makeSchema(*t))) {
+                setError("Failed to update record");
+                return false;
+            }
+            // Сначала гарантированно обновляем запись, затем индекс.
+            // RID остаётся тем же, поэтому индекс можно безопасно перестроить.
             for (const auto& col : t->columns) {
                 if (!col.indexed) continue;
                 int idx = columnIndex(*t, col.name);
@@ -301,10 +307,6 @@ public:
                     t->indexes[col.name]->remove(old_row[idx], rid);
                     t->indexes[col.name]->insert(new_row[idx], rid);
                 }
-            }
-            if (!t->records->update_record(rid, new_row, makeSchema(*t))) {
-                setError("Failed to update record");
-                return false;
             }
         }
         flushTable(db, table);

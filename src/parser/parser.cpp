@@ -38,15 +38,12 @@ void Parser::expect(TokenType type) {
 
 // Вспомогательная функция для безопасного сравнения ключевых слов
 bool isKeyword(const Token& t, const std::string& keyword) {
-    // Ключевые слова могут быть распознаны как KW_... или как IDENTIFIER, если они не в списке зарезервированных
-    // Но у нас все ключевые слова есть в TokenType.
-    // Для надежности сравниваем значение токена, приводя к верхнему регистру
     std::string val = t.value;
     std::transform(val.begin(), val.end(), val.begin(), ::toupper);
     return val == keyword;
 }
 
-    CommandPtr Parser::parse(const std::vector<Token>& tokens) {
+CommandPtr Parser::parse(const std::vector<Token>& tokens) {
     tokens_ = tokens;
     current_pos_ = 0;
     error_.clear();
@@ -57,7 +54,6 @@ bool isKeyword(const Token& t, const std::string& keyword) {
 
     Token first = peek();
 
-    // Приводим к верхнему регистру для универсального сравнения
     auto toUpper = [](const std::string& s) {
         std::string res = s;
         std::transform(res.begin(), res.end(), res.begin(), ::toupper);
@@ -82,13 +78,13 @@ bool isKeyword(const Token& t, const std::string& keyword) {
         std::string secondVal = toUpper(second.value);
 
         if (secondVal == "DATABASE") return parseDropDatabase();
-        if (secondVal == "TABLE") return parseDropTable(); // <-- Новая ветка
+        if (secondVal == "TABLE") return parseDropTable();
 
         error_ = "Syntax Error: Expected DATABASE or TABLE after DROP";
     }
     else if (val == "DELETE") {
         consume();
-        return parseDelete(); // <-- Новая ветка
+        return parseDelete();
     }
     else if (val == "USE") {
         return parseUseDatabase();
@@ -113,14 +109,13 @@ bool isKeyword(const Token& t, const std::string& keyword) {
 }
 
 CommandPtr Parser::parseCreateDatabase() {
-    expect(TokenType::KW_DATABASE); // На случай, если лексер распознал его как KEYWORD
+    expect(TokenType::KW_DATABASE);
     if (!error_.empty()) {
-        // Если не вышло через expect, пробуем просто съесть следующее слово, если это DATABASE
         if (error_.find("Expected") != std::string::npos && isKeyword(peek(), "DATABASE")) {
-             consume();
-             error_.clear();
+            consume();
+            error_.clear();
         } else {
-             return nullptr;
+            return nullptr;
         }
     }
 
@@ -141,18 +136,23 @@ CommandPtr Parser::parseCreateDatabase() {
     auto cmd = std::make_unique<CreateDatabaseCmd>();
     cmd->name = nameToken.value;
     storage_.createDatabase(cmd->name);
-    if (storage_.hasError()) { error_ = "Semantic Error: " + storage_.getError(); return nullptr; }
+    
+    // Storage уже вывел свою ошибку, просто проверяем статус
+    if (storage_.hasError()) {
+        // Не выводим повторно, только возвращаем null
+        return nullptr;
+    }
     return cmd;
 }
 
 CommandPtr Parser::parseDropDatabase() {
     expect(TokenType::KW_DATABASE);
-     if (!error_.empty()) {
+    if (!error_.empty()) {
         if (error_.find("Expected") != std::string::npos && isKeyword(peek(), "DATABASE")) {
-             consume();
-             error_.clear();
+            consume();
+            error_.clear();
         } else {
-             return nullptr;
+            return nullptr;
         }
     }
 
@@ -173,7 +173,10 @@ CommandPtr Parser::parseDropDatabase() {
     auto cmd = std::make_unique<DropDatabaseCmd>();
     cmd->name = nameToken.value;
     storage_.dropDatabase(cmd->name);
-    if (storage_.hasError()) { error_ = "Semantic Error: " + storage_.getError(); return nullptr; }
+    
+    if (storage_.hasError()) {
+        return nullptr;
+    }
     return cmd;
 }
 
@@ -197,12 +200,15 @@ CommandPtr Parser::parseUseDatabase() {
     auto cmd = std::make_unique<UseDatabaseCmd>();
     cmd->name = nameToken.value;
     storage_.useDatabase(cmd->name);
-    if (storage_.hasError()) { error_ = "Semantic Error: " + storage_.getError(); return nullptr; }
+    
+    if (storage_.hasError()) {
+        return nullptr;
+    }
     return cmd;
 }
 
 CommandPtr Parser::parseCreateTable() {
-    consume(); // Съели TABLE (так как мы уже проверили его в parse())
+    consume(); // Съели TABLE
 
     Token nameToken = consume();
     if (nameToken.type != TokenType::IDENTIFIER) {
@@ -223,7 +229,6 @@ CommandPtr Parser::parseCreateTable() {
         }
 
         Token typeToken = consume();
-        // Проверяем тип, учитывая, что INT и STRING могут быть ключевыми словами
         if (!isKeyword(typeToken, "INT") && !isKeyword(typeToken, "STRING")) {
             error_ = "Syntax Error: Expected INT or STRING type for column '" + colName.value + "'";
             return nullptr;
@@ -233,7 +238,6 @@ CommandPtr Parser::parseCreateTable() {
         col.name = colName.value;
         col.type = typeToken.value;
 
-        // Проверка модификаторов
         while (isKeyword(peek(), "NOT_NULL") || isKeyword(peek(), "INDEXED")) {
             Token mod = consume();
             if (isKeyword(mod, "NOT_NULL")) col.not_null = true;
@@ -271,7 +275,10 @@ CommandPtr Parser::parseCreateTable() {
     cmd->columns = columns;
 
     storage_.createTable(db, cmd->table_name, cmd->columns);
-    if (storage_.hasError()) { error_ = "Semantic Error: " + storage_.getError(); return nullptr; }
+    
+    if (storage_.hasError()) {
+        return nullptr;
+    }
     return cmd;
 }
 
@@ -287,7 +294,6 @@ CommandPtr Parser::parseInsert() {
 
     std::vector<std::string> colNames;
 
-    // Опциональный список колонок: (col1, col2)
     if (peek().type == TokenType::LPAREN) {
         consume();
         while (peek().type != TokenType::RPAREN) {
@@ -303,7 +309,6 @@ CommandPtr Parser::parseInsert() {
         if (!error_.empty()) return nullptr;
     }
 
-    // Ожидаем VALUE
     Token valToken = consume();
     if (!isKeyword(valToken, "VALUE")) {
         error_ = "Syntax Error: Expected VALUE keyword";
@@ -312,9 +317,8 @@ CommandPtr Parser::parseInsert() {
 
     std::vector<std::vector<Value>> rows;
 
-    // Парсинг кортежей: (val1, val2), (val3, val4)
     while (peek().type == TokenType::LPAREN) {
-        consume(); // (
+        consume();
         std::vector<Value> currentRow;
 
         while (peek().type != TokenType::RPAREN) {
@@ -341,7 +345,6 @@ CommandPtr Parser::parseInsert() {
 
         rows.push_back(currentRow);
 
-        // Если следующая запятая, значит есть еще кортеж
         if (peek().type == TokenType::COMMA) {
             consume();
         } else {
@@ -352,7 +355,6 @@ CommandPtr Parser::parseInsert() {
     expect(TokenType::SEMICOLON);
     if (!error_.empty()) return nullptr;
 
-    // Семантическая проверка и выполнение
     if (db.empty()) db = storage_.getCurrentDatabase();
     if (db.empty()) {
         error_ = "Semantic Error: No database selected.";
@@ -369,7 +371,10 @@ CommandPtr Parser::parseInsert() {
     cmd->column_names = colNames;
     cmd->rows = rows;
 
-    if (!storage_.insertRows(db, cmd->table_name, cmd->rows, cmd->column_names)) { error_ = "Semantic Error: " + storage_.getError(); return nullptr; }
+    if (!storage_.insertRows(db, cmd->table_name, cmd->rows, cmd->column_names)) {
+        // Storage уже вывел ошибку, не дублируем
+        return nullptr;
+    }
     return cmd;
 }
 
@@ -397,7 +402,10 @@ CommandPtr Parser::parseDropTable() {
     auto cmd = std::make_unique<DropTableCmd>();
     cmd->table_name = table;
     storage_.dropTable(db, cmd->table_name);
-    if (storage_.hasError()) { error_ = "Semantic Error: " + storage_.getError(); return nullptr; }
+    
+    if (storage_.hasError()) {
+        return nullptr;
+    }
     return cmd;
 }
 
@@ -411,7 +419,6 @@ CommandPtr Parser::parseDelete() {
     Condition cond;
     bool has_where = false;
     if (isKeyword(peek(), "WHERE")) {
-        // Проверяем наличие WHERE
         consume(); // Съели WHERE
         has_where = true;
         if (!parseCondition(cond)) return nullptr;
@@ -436,14 +443,13 @@ CommandPtr Parser::parseDelete() {
     if (has_where) cmd->where = cond;
 
     if (!storage_.deleteRows(db, table, cond, has_where)) {
-        error_ = "Semantic Error: " + storage_.getError();
+        // Storage уже вывел ошибку
         return nullptr;
     }
     return cmd;
 }
 
 CommandPtr Parser::parseUpdate() {
-    // Имя таблицы
     std::string db, table;
     if (!parseTableReference(db, table)) return nullptr;
 
@@ -451,14 +457,13 @@ CommandPtr Parser::parseUpdate() {
     if (!error_.empty()) return nullptr;
 
     std::vector<std::pair<std::string, Value>> set_clause;
-    // Парсинг списка присваиваний: col = val, col2 = val2
     while (true) {
         Token colToken = consume();
         if (colToken.type != TokenType::IDENTIFIER) {
             error_ = "Syntax Error: Expected column name in SET clause";
             return nullptr;
         }
-        expect(TokenType::ASSIGN); // =
+        expect(TokenType::ASSIGN);
         if (!error_.empty()) return nullptr;
 
         Operand operand;
@@ -476,7 +481,6 @@ CommandPtr Parser::parseUpdate() {
     Condition cond;
     bool has_where = false;
     if (isKeyword(peek(), "WHERE")) {
-        // Проверяем наличие WHERE
         consume();
         has_where = true;
         if (!parseCondition(cond)) return nullptr;
@@ -502,17 +506,16 @@ CommandPtr Parser::parseUpdate() {
     if (has_where) cmd->where = cond;
 
     if (!storage_.updateRows(db, table, set_clause, cond, has_where)) {
-        error_ = "Semantic Error: " + storage_.getError();
+        // Storage уже вывел ошибку
         return nullptr;
     }
     return cmd;
 }
 
 CommandPtr Parser::parseSelect() {
-    auto cmd = std::make_unique<SelectCmd>(); // Создаем команду сразу
+    auto cmd = std::make_unique<SelectCmd>();
     std::vector<SelectColumn> cols;
 
-    // Проверяем, это * или список колонок
     if (peek().type == TokenType::ASTERISK) {
         consume();
         cols.push_back({"*", "", true});
@@ -525,7 +528,6 @@ CommandPtr Parser::parseSelect() {
             }
             SelectColumn col;
             col.name = colToken.value;
-            // Проверка на алиас (AS)
             if (isKeyword(peek(), "AS")) {
                 consume();
                 Token aliasToken = consume();
@@ -550,8 +552,7 @@ CommandPtr Parser::parseSelect() {
     cmd->columns = cols;
 
     if (isKeyword(peek(), "WHERE")) {
-        // Проверяем наличие WHERE
-        consume(); // Съели WHERE
+        consume();
         cmd->has_where = true;
         if (!parseCondition(cmd->where)) return nullptr;
     }
@@ -568,8 +569,9 @@ CommandPtr Parser::parseSelect() {
         error_ = "Semantic Error: Table '" + table + "' does not exist";
         return nullptr;
     }
+    
     if (!storage_.selectRows(db, table, cols, cmd->where, cmd->has_where)) {
-        error_ = "Semantic Error: " + storage_.getError();
+        // Storage уже вывел ошибку
         return nullptr;
     }
     return cmd;
@@ -623,7 +625,6 @@ bool Parser::parseOperand(Operand& operand) {
 bool Parser::parseCondition(Condition& condition) {
     if (!parseOperand(condition.left)) return false;
     Token op = consume();
-    // Проверяем операторы сравнения
     if (op.type == TokenType::OP_EQ || op.type == TokenType::OP_NEQ ||
         op.type == TokenType::OP_LT || op.type == TokenType::OP_GT ||
         op.type == TokenType::OP_LTE || op.type == TokenType::OP_GTE) {

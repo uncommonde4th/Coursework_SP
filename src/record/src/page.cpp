@@ -4,16 +4,8 @@
 
 namespace sysdb {
 
-Page::Page() {
-    memset(this, 0, sizeof(Page));
+Page::Page() : header_(), slots_{}, data_{} {
     header_.data_start = static_cast<uint16_t>(DATA_SIZE);  // изначально всё свободно
-    header_.next_free_slot = 0xFFFF;
-
-    for (auto& slot : slots_) {
-        slot.set_free(true);
-        slot.offset = 0;
-        slot.set_length(0);
-    }
 }
 
 bool Page::insert_record(const void* data, uint16_t size, uint16_t& slot_id) {
@@ -50,19 +42,31 @@ bool Page::update_record(uint16_t slot_id, const void* data, uint16_t size) {
     uint16_t old_size = slots_[slot_id].get_length();
 
     if (size <= old_size) {
-        // Новая запись не длиннее старой — перезаписываем на месте.
         memcpy(data_ + slots_[slot_id].offset, data, size);
         slots_[slot_id].set_length(size);
-        // Место, оставшееся справа от записи, не переиспользуется до compact() —
-        // это допустимая внутренняя фрагментация слотированной страницы.
     } else {
-        // Новая запись больше — переносим в новое место.
-        uint16_t new_slot_id;
-        if (!insert_record(data, size, new_slot_id)) {
+        if (static_cast<size_t>(get_free_space()) + old_size < size) {
+            compact();
+            if (get_free_space() < size) {
+                return false;
+            }
+        } else {
+            slots_[slot_id].set_free(true);
+            header_.slot_count--;
+
+            compact();
+        }
+
+        if (get_free_space() < size) {
             return false;
         }
-        delete_record(slot_id);
-        slot_id = new_slot_id;
+
+        header_.data_start -= size;
+        memcpy(data_ + header_.data_start, data, size);
+        slots_[slot_id].offset = header_.data_start;
+        slots_[slot_id].set_length(size);
+        slots_[slot_id].set_free(false);
+        header_.slot_count++;
     }
 
     update_checksum();
@@ -111,7 +115,7 @@ uint16_t Page::get_free_space() const {
 }
 
 void Page::compact() {
-    char new_data[DATA_SIZE];
+    char new_data[DATA_SIZE] = {};
     uint16_t write_pos = static_cast<uint16_t>(DATA_SIZE);
 
     for (uint16_t i = 0; i < MAX_SLOTS; i++) {

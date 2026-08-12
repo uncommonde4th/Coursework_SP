@@ -67,13 +67,13 @@ void test_string_keys() {
     tree.insert(Value::make_string("banana"), RecordId(1, 2));
     tree.insert(Value::make_string("cherry"), RecordId(1, 3));
 
-    std::string long_str(100, 'x'); // длиннее MAX_KEY_LEN=64, будет обрезана
+    std::string long_str(300, 'x'); // длиннее MAX_KEY_LEN=255, будет обрезана при сравнении ключей индекса
     tree.insert(Value::make_string(long_str), RecordId(1, 4));
 
     auto r1 = tree.find(Value::make_string("banana"));
     assert(r1.size() == 1 && r1[0].slot_id == 2);
 
-    std::string truncated = long_str.substr(0, 64);
+    std::string truncated = long_str.substr(0, 255);
     auto r2 = tree.find(Value::make_string(truncated));
     assert(r2.size() == 1 && r2[0].slot_id == 4);
 

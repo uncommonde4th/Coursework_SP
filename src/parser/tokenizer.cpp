@@ -85,7 +85,6 @@ Token Tokenizer::scanIdentifierOrKeyword() {
         // Обычно это значит, что CREATE, create, Create - ок.
         // А "смешение" значит CrEaTe - ошибка.
 
-        bool isMixed = false;
         bool hasUpper = false;
         bool hasLower = false;
 
