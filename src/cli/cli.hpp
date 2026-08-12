@@ -3,6 +3,9 @@
 
 #include <string>
 #include <vector>
+#include "parser/parser.hpp"
+#include "parser/tokenizer.hpp"
+#include "storage_engine.hpp"
 
 class CLI {
 public:
@@ -27,6 +30,8 @@ private:
 
     // Флаг текущего контекста (для USE database)
     std::string current_database_;
+    sysdb::StorageStub storage_;
+    sysdb::Parser parser_;
 };
 
 #endif // CLI_HPP

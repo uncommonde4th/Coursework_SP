@@ -5,6 +5,7 @@
 #include <vector>
 #include <variant>
 #include <memory>
+#include "core/types/include/value.hpp"
 
 namespace sysdb {
 
@@ -60,14 +61,10 @@ namespace sysdb {
         CommandType getType() const override { return CommandType::CREATE_TABLE; }
     };
 
-    struct Value {
-        enum Type { INT_VAL, STRING_VAL, NULL_VAL } type;
-        int64_t int_value;
-        std::string string_value;
-
-        static Value make_int(int64_t v) { return {INT_VAL, v, ""}; }
-        static Value make_string(const std::string& v) { return {STRING_VAL, 0, v}; }
-        static Value make_null() { return {NULL_VAL, 0, ""}; }
+    struct Operand {
+        bool is_column = false;
+        std::string column;
+        Value value = Value::make_null();
     };
 
     struct InsertCmd : public Command {
@@ -87,7 +84,9 @@ namespace sysdb {
     struct Condition {
         std::string column;
         std::string op; // "==", "!=", "<", ">", "<=", ">="
-        Value value;
+        Operand left;
+        Operand right;
+        Operand third;
     };
 
     struct DeleteCmd : public Command {

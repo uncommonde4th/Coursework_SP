@@ -111,6 +111,7 @@ Token Tokenizer::scanNumber() {
     size_t start = current_pos_;
     std::string num;
 
+    if (peek() == '-') num += advance();
     while (current_pos_ < input_.length() && std::isdigit(input_[current_pos_])) {
         num += advance();
     }
@@ -196,7 +197,7 @@ std::vector<Token> Tokenizer::tokenize() {
 
         if (std::isalpha(c) || c == '_') {
             tokens.push_back(scanIdentifierOrKeyword());
-        } else if (std::isdigit(c)) {
+        } else if (std::isdigit(c) || (c == '-' && current_pos_ + 1 < input_.length() && std::isdigit(input_[current_pos_ + 1]))) {
             tokens.push_back(scanNumber());
         } else if (c == '"') {
             tokens.push_back(scanString());

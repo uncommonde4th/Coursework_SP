@@ -3,7 +3,7 @@
 
 #include "parser/token.hpp"
 #include "parser/commands.hpp"
-#include "storage_stub.hpp"
+#include "storage_engine.hpp"
 #include <vector>
 #include <string>
 
@@ -43,6 +43,9 @@ namespace sysdb {
         CommandPtr parseDelete();
         CommandPtr parseUpdate();
         CommandPtr parseSelect();
+        bool parseTableReference(std::string& database, std::string& table);
+        bool parseOperand(Operand& operand);
+        bool parseCondition(Condition& condition);
     };
 
 } // namespace sysdb

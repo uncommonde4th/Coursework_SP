@@ -24,6 +24,10 @@ add_executable(sysdb
         src/cli/cli.cpp
         src/parser/tokenizer.cpp
         src/parser/parser.cpp
+        src/record/src/heap_file.cpp
+        src/record/src/page.cpp
+        src/record/src/record_manager.cpp
+        src/btree/src/bplus_tree.cpp
 )
 
 # Добавляем include директории

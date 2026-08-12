@@ -3,8 +3,9 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include "parser/tokenizer.hpp"
 
-CLI::CLI() : current_database_("") {}
+CLI::CLI() : current_database_(""), storage_(), parser_(storage_) {}
 
 void CLI::runInteractive() {
     std::cout << "SysDB Interactive Mode" << std::endl;
@@ -127,9 +128,23 @@ void CLI::runBatchMode(const std::string& filename) {
 
 void CLI::processCommand(const std::string& command) {
     // Пока просто выводим команду обратно (echo)
-    std::cout << "[Received]: " << command << std::endl;
-
     // TODO: Здесь будет парсинг и выполнение команды
+    try {
+        sysdb::Tokenizer tokenizer(command);
+        auto tokens = tokenizer.tokenize();
+        if (tokenizer.hasError()) {
+            std::cerr << tokenizer.getError() << std::endl;
+            return;
+        }
+        parser_.parse(tokens);
+        if (parser_.hasError()) {
+            std::cerr << parser_.getError() << std::endl;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+    } catch (...) {
+        std::cerr << "Error: unknown failure" << std::endl;
+    }
 }
 
 bool CLI::isExitCommand(const std::string& command) {
@@ -142,5 +157,5 @@ bool CLI::isExitCommand(const std::string& command) {
                                    [](char c) { return c == ' ' || c == ';' || c == '\t' || c == '\n' || c == '\r'; }),
                     lower_cmd.end());
 
-    return (lower_cmd == "exit");
+    return (lower_cmd == "exit" || lower_cmd == "quit");
 }
