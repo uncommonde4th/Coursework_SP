@@ -16,7 +16,7 @@ HeapFile::~HeapFile() {
 }
 
 bool HeapFile::open() {
-    fd_ = ::open(filename_.c_str(), O_RDWR | O_CREAT, 0644);
+    fd_ = ::open(filename_.c_str(), O_RDWR | O_CREAT | PLATFORM_O_BINARY, 0644);
     if (fd_ < 0) {
         return false;
     }

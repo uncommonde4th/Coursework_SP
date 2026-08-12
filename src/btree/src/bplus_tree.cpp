@@ -24,7 +24,7 @@ bool BPlusTree::initialize() {
     std::lock_guard<std::mutex> lock(mutex_);
 
     std::string filename = index_name_ + ".idx";
-    fd_ = ::open(filename.c_str(), O_RDWR | O_CREAT, 0644);
+    fd_ = ::open(filename.c_str(), O_RDWR | O_CREAT | PLATFORM_O_BINARY, 0644);
     if (fd_ < 0) {
         return false;
     }

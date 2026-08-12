@@ -51,8 +51,12 @@ public:
             return;
         }
         if (current_db_ == name) current_db_.clear();
-        std::filesystem::remove_all(root_ / name);
+
         databases_.erase(name);
+
+        std::error_code ec;
+        std::filesystem::remove_all(root_ / name, ec);
+
         flushMetadata();
         std::cout << "[STORAGE] Database '" << name << "' dropped." << std::endl;
     }
@@ -233,12 +237,21 @@ public:
             setError("Table '" + table + "' does not exist");
             return;
         }
-        std::filesystem::remove(tablePath(db, table).string() + ".dat");
-        std::filesystem::remove(tablePath(db, table).string() + ".schema");
-        for (const auto& col : it->second.columns) {
-            if (col.indexed) std::filesystem::remove(tablePath(db, table).string() + "." + col.name + ".idx");
-        }
+
+        std::vector<ColumnDef> columns = it->second.columns;
+        const std::string base_path = tablePath(db, table).string();
+
         db_it->second.erase(it);
+
+        std::error_code ec;
+        std::filesystem::remove(base_path + ".dat", ec);
+        std::filesystem::remove(base_path + ".schema", ec);
+        for (const auto& col : columns) {
+            if (col.indexed) {
+                std::filesystem::remove(base_path + "." + col.name + ".idx", ec);
+            }
+        }
+
         std::cout << "[STORAGE] Table '" << table << "' dropped from '" << db << "'." << std::endl;
     }
 
