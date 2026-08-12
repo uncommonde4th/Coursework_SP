@@ -1,4 +1,5 @@
 #include "heap_file.hpp"
+#include "core/utils/platform.hpp"
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -124,7 +125,7 @@ std::vector<RecordId> HeapFile::scan_all() const {
 
 void HeapFile::flush() {
     if (fd_ >= 0) {
-        fsync(fd_);
+        platform_fsync(fd_);
     }
 }
 

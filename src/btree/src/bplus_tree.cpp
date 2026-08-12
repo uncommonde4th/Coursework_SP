@@ -1,5 +1,5 @@
 #include "bplus_tree.hpp"
-
+#include "core/utils/platform.hpp"
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -56,7 +56,7 @@ bool BPlusTree::initialize() {
 
 void BPlusTree::flush() {
     if (fd_ >= 0) {
-        fsync(fd_);
+        platform_fsync(fd_);
     }
 }
 
