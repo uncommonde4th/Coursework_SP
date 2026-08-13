@@ -13,10 +13,8 @@ namespace sysdb {
     public:
         explicit Parser(StorageStub& storage);
 
-        // Главный метод: принимает вектор токенов и возвращает команду
         CommandPtr parse(const std::vector<Token>& tokens);
 
-        // Получить сообщение об ошибке
         const std::string& getError() const { return error_; }
         bool hasError() const { return !error_.empty(); }
 
@@ -26,14 +24,12 @@ namespace sysdb {
         size_t current_pos_;
         std::string error_;
 
-        // Вспомогательные методы
         Token peek();
         Token consume();
         bool match(TokenType type);
         void expect(TokenType type);
         bool checkKeyword(const std::string& keyword);
 
-        // Методы парсинга конкретных команд
         CommandPtr parseCreateDatabase();
         CommandPtr parseDropDatabase();
         CommandPtr parseUseDatabase();
@@ -45,7 +41,12 @@ namespace sysdb {
         CommandPtr parseSelect();
         bool parseTableReference(std::string& database, std::string& table);
         bool parseOperand(Operand& operand);
-        bool parseCondition(Condition& condition);
+
+        // === НОВЫЕ МЕТОДЫ ДЛЯ ЗАДАНИЯ 11 ===
+        ConditionPtr parseOrExpr();
+        ConditionPtr parseAndExpr();
+        ConditionPtr parseAtom();
+        // ====================================
     };
 
 } // namespace sysdb
