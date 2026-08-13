@@ -13,11 +13,13 @@ enum class TokenType {
     KW_INSERT, KW_INTO, KW_VALUE, KW_UPDATE, KW_SET, KW_DELETE, KW_FROM,
     KW_SELECT, KW_WHERE, KW_AS, KW_AND, KW_OR, KW_NOT, KW_NULL,
     KW_BETWEEN, KW_LIKE, KW_INT, KW_STRING, KW_NOT_NULL, KW_INDEXED,
+    KW_DEFAULT, KW_REVERT,
 
     // Литералы и идентификаторы
     IDENTIFIER,   // Имена таблиц, колонок, БД
     NUMBER,       // Целые числа
     STRING_LITERAL, // Строки в "кавычках"
+    TIMESTAMP_LITERAL, // yyyy.mm.dd-hh:mm:ss.msmsms (для REVERT)
 
     // Операторы и символы
     OP_EQ,        // ==
@@ -77,9 +79,12 @@ inline std::string tokenTypeToString(TokenType type) {
         case TokenType::KW_STRING: return "STRING";
         case TokenType::KW_NOT_NULL: return "NOT_NULL";
         case TokenType::KW_INDEXED: return "INDEXED";
+        case TokenType::KW_DEFAULT: return "DEFAULT";
+        case TokenType::KW_REVERT: return "REVERT";
         case TokenType::IDENTIFIER: return "IDENTIFIER";
         case TokenType::NUMBER: return "NUMBER";
         case TokenType::STRING_LITERAL: return "STRING_LITERAL";
+        case TokenType::TIMESTAMP_LITERAL: return "TIMESTAMP_LITERAL";
         case TokenType::OP_EQ: return "==";
         case TokenType::OP_NEQ: return "!=";
         case TokenType::OP_LT: return "<";

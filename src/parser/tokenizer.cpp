@@ -30,7 +30,9 @@ const std::unordered_map<std::string, TokenType> Tokenizer::keywords_ = {
     {"INT", TokenType::KW_INT},
     {"STRING", TokenType::KW_STRING},
     {"NOT_NULL", TokenType::KW_NOT_NULL},
-    {"INDEXED", TokenType::KW_INDEXED}
+    {"INDEXED", TokenType::KW_INDEXED},
+    {"DEFAULT", TokenType::KW_DEFAULT},
+    {"REVERT", TokenType::KW_REVERT}
 };
 
 Tokenizer::Tokenizer(const std::string& input)
@@ -104,6 +106,48 @@ Token Tokenizer::scanIdentifierOrKeyword() {
     // Проверка имени: не может начинаться с цифры (уже гарантировано вызовом этого метода)
     // Может содержать латиницу, цифры, _
     return Token(TokenType::IDENTIFIER, word, start);
+}
+
+// Формат: yyyy.mm.dd-hh:mm:ss.msmsms (ровно 23 символа), используется
+// как аргумент команды REVERT. Метод не потребляет вход, если формат
+// не подходит - тогда вызывающая сторона откатится к обычному scanNumber().
+bool Tokenizer::tryScanTimestamp(Token& out) {
+    const size_t start = current_pos_;
+    const size_t len = 23; // "yyyy.mm.dd-hh:mm:ss.mmm"
+    if (start + len > input_.length()) return false;
+
+    auto isDigits = [&](size_t off, size_t count) {
+        for (size_t i = 0; i < count; ++i) {
+            if (!std::isdigit(static_cast<unsigned char>(input_[start + off + i]))) return false;
+        }
+        return true;
+    };
+
+    if (!isDigits(0, 4)) return false;
+    if (input_[start + 4] != '.') return false;
+    if (!isDigits(5, 2)) return false;
+    if (input_[start + 7] != '.') return false;
+    if (!isDigits(8, 2)) return false;
+    if (input_[start + 10] != '-') return false;
+    if (!isDigits(11, 2)) return false;
+    if (input_[start + 13] != ':') return false;
+    if (!isDigits(14, 2)) return false;
+    if (input_[start + 16] != ':') return false;
+    if (!isDigits(17, 2)) return false;
+    if (input_[start + 19] != '.') return false;
+    if (!isDigits(20, 3)) return false;
+
+    // Убеждаемся, что сразу после метки не идёт ещё одна цифра/точка/двоеточие -
+    // иначе это не валидный литерал целиком (защита от частичного совпадения).
+    if (start + len < input_.length()) {
+        char next = input_[start + len];
+        if (std::isdigit(static_cast<unsigned char>(next)) || next == '.' || next == ':') return false;
+    }
+
+    std::string value = input_.substr(start, len);
+    out = Token(TokenType::TIMESTAMP_LITERAL, value, start);
+    current_pos_ += len;
+    return true;
 }
 
 Token Tokenizer::scanNumber() {
@@ -196,7 +240,14 @@ std::vector<Token> Tokenizer::tokenize() {
 
         if (std::isalpha(c) || c == '_') {
             tokens.push_back(scanIdentifierOrKeyword());
-        } else if (std::isdigit(c) || (c == '-' && current_pos_ + 1 < input_.length() && std::isdigit(input_[current_pos_ + 1]))) {
+        } else if (std::isdigit(c)) {
+            Token ts;
+            if (tryScanTimestamp(ts)) {
+                tokens.push_back(ts);
+            } else {
+                tokens.push_back(scanNumber());
+            }
+        } else if (c == '-' && current_pos_ + 1 < input_.length() && std::isdigit(input_[current_pos_ + 1])) {
             tokens.push_back(scanNumber());
         } else if (c == '"') {
             tokens.push_back(scanString());

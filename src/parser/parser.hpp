@@ -43,6 +43,7 @@ namespace sysdb {
         CommandPtr parseDelete();
         CommandPtr parseUpdate();
         CommandPtr parseSelect();
+        CommandPtr parseRevert();
         bool parseTableReference(std::string& database, std::string& table);
         bool parseOperand(Operand& operand);
         bool parseCondition(Condition& condition);

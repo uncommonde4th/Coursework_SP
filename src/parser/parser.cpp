@@ -101,6 +101,10 @@ CommandPtr Parser::parse(const std::vector<Token>& tokens) {
         consume();
         return parseSelect();
     }
+    else if (val == "REVERT") {
+        consume();
+        return parseRevert();
+    }
     else {
         error_ = "Syntax Error: Unknown command '" + first.value + "'";
     }
@@ -238,10 +242,25 @@ CommandPtr Parser::parseCreateTable() {
         col.name = colName.value;
         col.type = typeToken.value;
 
-        while (isKeyword(peek(), "NOT_NULL") || isKeyword(peek(), "INDEXED")) {
+        while (isKeyword(peek(), "NOT_NULL") || isKeyword(peek(), "INDEXED") || isKeyword(peek(), "DEFAULT")) {
             Token mod = consume();
             if (isKeyword(mod, "NOT_NULL")) col.not_null = true;
-            if (isKeyword(mod, "INDEXED")) col.indexed = true;
+            else if (isKeyword(mod, "INDEXED")) col.indexed = true;
+            else if (isKeyword(mod, "DEFAULT")) {
+                Token defTok = consume();
+                if (defTok.type == TokenType::NUMBER) {
+                    try { col.default_value = Value::make_int(std::stoll(defTok.value)); }
+                    catch (...) { error_ = "Syntax Error: Invalid integer literal in DEFAULT for column '" + colName.value + "'"; return nullptr; }
+                } else if (defTok.type == TokenType::STRING_LITERAL) {
+                    col.default_value = Value::make_string(defTok.value);
+                } else if (isKeyword(defTok, "NULL")) {
+                    col.default_value = Value::make_null();
+                } else {
+                    error_ = "Syntax Error: Expected constant value after DEFAULT for column '" + colName.value + "'";
+                    return nullptr;
+                }
+                col.has_default = true;
+            }
         }
 
         columns.push_back(col);
@@ -453,6 +472,10 @@ CommandPtr Parser::parseUpdate() {
     std::string db, table;
     if (!parseTableReference(db, table)) return nullptr;
 
+    // Резолвим БД пораньше, чтобы уметь искать схему таблицы уже при разборе
+    // SET-выражений (нужно для SET col = DEFAULT).
+    std::string resolved_db = db.empty() ? storage_.getCurrentDatabase() : db;
+
     expect(TokenType::KW_SET); // SET
     if (!error_.empty()) return nullptr;
 
@@ -466,13 +489,36 @@ CommandPtr Parser::parseUpdate() {
         expect(TokenType::ASSIGN);
         if (!error_.empty()) return nullptr;
 
-        Operand operand;
-        if (!parseOperand(operand)) return nullptr;
-        if (operand.is_column) {
-            error_ = "Syntax Error: SET value must be a constant";
-            return nullptr;
+        if (isKeyword(peek(), "DEFAULT")) {
+            // SET col = DEFAULT - берём DEFAULT-значение колонки из CREATE TABLE (задание 10).
+            consume();
+            const auto* cols = resolved_db.empty() ? nullptr : storage_.getTableSchema(resolved_db, table);
+            if (!cols) {
+                error_ = "Semantic Error: Table '" + table + "' does not exist";
+                return nullptr;
+            }
+            const ColumnDef* col_def = nullptr;
+            for (const auto& c : *cols) {
+                if (c.name == colToken.value) { col_def = &c; break; }
+            }
+            if (!col_def) {
+                error_ = "Semantic Error: Column '" + colToken.value + "' does not exist";
+                return nullptr;
+            }
+            if (!col_def->has_default) {
+                error_ = "Semantic Error: Column '" + colToken.value + "' has no DEFAULT value";
+                return nullptr;
+            }
+            set_clause.push_back({colToken.value, col_def->default_value});
+        } else {
+            Operand operand;
+            if (!parseOperand(operand)) return nullptr;
+            if (operand.is_column) {
+                error_ = "Syntax Error: SET value must be a constant";
+                return nullptr;
+            }
+            set_clause.push_back({colToken.value, operand.value});
         }
-        set_clause.push_back({colToken.value, operand.value});
 
         if (peek().type == TokenType::COMMA) consume();
         else break;
@@ -571,6 +617,44 @@ CommandPtr Parser::parseSelect() {
     }
     
     if (!storage_.selectRows(db, table, cols, cmd->where, cmd->has_where)) {
+        // Storage уже вывел ошибку
+        return nullptr;
+    }
+    return cmd;
+}
+
+// REVERT [table_name] [yyyy.mm.dd-hh:mm:ss.msmsms]; (доп. задание 1)
+CommandPtr Parser::parseRevert() {
+    std::string db, table;
+    if (!parseTableReference(db, table)) {
+        error_ = "Syntax Error: Expected table name after REVERT";
+        return nullptr;
+    }
+
+    Token tsToken = consume();
+    if (tsToken.type != TokenType::TIMESTAMP_LITERAL && tsToken.type != TokenType::STRING_LITERAL) {
+        error_ = "Syntax Error: Expected timestamp in format yyyy.mm.dd-hh:mm:ss.msmsms after table name in REVERT";
+        return nullptr;
+    }
+
+    expect(TokenType::SEMICOLON);
+    if (!error_.empty()) return nullptr;
+
+    if (db.empty()) db = storage_.getCurrentDatabase();
+    if (db.empty()) {
+        error_ = "Semantic Error: No database selected.";
+        return nullptr;
+    }
+    if (!storage_.tableExists(db, table)) {
+        error_ = "Semantic Error: Table '" + table + "' does not exist";
+        return nullptr;
+    }
+
+    auto cmd = std::make_unique<RevertCmd>();
+    cmd->table_name = table;
+    cmd->timestamp = tsToken.value;
+
+    if (!storage_.revertTable(db, table, tsToken.value)) {
         // Storage уже вывел ошибку
         return nullptr;
     }

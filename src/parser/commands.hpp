@@ -20,6 +20,7 @@ namespace sysdb {
         DELETE_CMD,
         UPDATE_CMD,
         SELECT_CMD,
+        REVERT_CMD,
         UNKNOWN
     };
 
@@ -52,6 +53,8 @@ namespace sysdb {
         std::string type; // "INT" или "STRING"
         bool not_null = false;
         bool indexed = false;
+        bool has_default = false; // задание 10: DEFAULT [value]
+        Value default_value = Value::make_null();
     };
 
     struct CreateTableCmd : public Command {
@@ -119,6 +122,13 @@ namespace sysdb {
         bool has_where = false;
 
         CommandType getType() const override { return CommandType::SELECT_CMD; }
+    };
+
+    // REVERT [table_name] [yyyy.mm.dd-hh:mm:ss.msmsms]; (доп. задание 1)
+    struct RevertCmd : public Command {
+        std::string table_name;
+        std::string timestamp; // хранится как есть, разбор - в StorageStub
+        CommandType getType() const override { return CommandType::REVERT_CMD; }
     };
 
     using CommandPtr = std::unique_ptr<Command>;

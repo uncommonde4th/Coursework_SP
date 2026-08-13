@@ -36,6 +36,10 @@ namespace sysdb {
         Token scanNumber();
         Token scanString();
         Token scanOperator();
+        // Пытается распознать литерал временной метки вида
+        // yyyy.mm.dd-hh:mm:ss.msmsms начиная с текущей позиции.
+        // Возвращает true, если распознавание успешно (токен добавлен в out).
+        bool tryScanTimestamp(Token& out);
     };
 
 } // namespace sysdb
