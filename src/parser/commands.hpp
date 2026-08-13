@@ -77,14 +77,10 @@ namespace sysdb {
 
     struct ConditionNode {
         enum Type { COMPARISON, LOGICAL } type;
-
-        // Для COMPARISON
         Operand left;
         CondOp op;
         Operand right;
-        Operand third; // Только для BETWEEN
-
-        // Для LOGICAL
+        Operand third;
         LogicOp logic_op;
         ConditionPtr lhs;
         ConditionPtr rhs;
@@ -106,7 +102,6 @@ namespace sysdb {
         }
     };
 
-    // Обертка для сохранения совместимости с StorageStub
     struct Condition {
         ConditionPtr root;
         bool isEmpty() const { return root == nullptr; }
@@ -128,11 +123,18 @@ namespace sysdb {
         CommandType getType() const override { return CommandType::UPDATE_CMD; }
     };
 
+    // ============================================================
+    // Задание 12: Агрегатные функции
+    // ============================================================
+    enum class AggFunc { NONE, SUM, COUNT, AVG };
+
     struct SelectColumn {
-        std::string name;
-        std::string alias;
-        bool is_star = false;
+        std::string name;       // Имя колонки (для обычных) или аргумент агрегата
+        std::string alias;      // Алиас (если задан через AS)
+        bool is_star = false;   // Флаг для SELECT *
+        AggFunc agg = AggFunc::NONE; // Тип агрегатной функции
     };
+    // ============================================================
 
     struct SelectCmd : public Command {
         std::string table_name;

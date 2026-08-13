@@ -241,24 +241,129 @@ public:
         return true;
     }
 
-    bool selectRows(const std::string& db, const std::string& table,
+        bool selectRows(const std::string& db, const std::string& table,
                     const std::vector<SelectColumn>& columns,
                     const Condition& cond, bool has_where) {
         clearError();
         const Table* t = findTableConst(db, table);
         if (!t) return false;
-        auto rids = matchingRecords(*t, cond, has_where);
 
+        // Определяем, есть ли агрегатные функции
+        bool has_agg = false;
+        for (const auto& col : columns) {
+            if (col.agg != AggFunc::NONE) { has_agg = true; break; }
+        }
+
+        // Валидация колонок
         std::vector<SelectColumn> selected;
-        if (columns.size() == 1 && columns[0].is_star) {
-            for (const auto& col : t->columns) selected.push_back({col.name, "", false});
+        if (!has_agg && columns.size() == 1 && columns[0].is_star) {
+            for (const auto& col : t->columns) selected.push_back({col.name, "", false, AggFunc::NONE});
         } else {
             selected = columns;
             for (const auto& col : selected) {
-                if (columnIndex(*t, col.name) < 0) { setError("Column '" + col.name + "' does not exist"); return false; }
+                if (col.agg == AggFunc::COUNT && col.name == "*") continue; // COUNT(*) валиден всегда
+                if (col.agg != AggFunc::NONE || !col.is_star) {
+                    if (columnIndex(*t, col.name) < 0) {
+                        setError("Column '" + col.name + "' does not exist");
+                        return false;
+                    }
+                }
             }
         }
 
+        auto rids = matchingRecords(*t, cond, has_where);
+
+        // ============================================================
+        // Задание 12: Агрегатные функции
+        // ============================================================
+        if (has_agg) {
+            // Инициализация аккумуляторов
+            std::vector<double> sums(selected.size(), 0.0);
+            std::vector<int64_t> counts(selected.size(), 0);
+            std::vector<bool> has_non_null(selected.size(), false);
+
+            for (const auto& rid : rids) {
+                auto row = t->records->get_record(rid, makeSchema(*t));
+                if (row.empty()) continue;
+
+                for (size_t i = 0; i < selected.size(); ++i) {
+                    const auto& col = selected[i];
+                    if (col.agg == AggFunc::NONE) continue;
+
+                    if (col.agg == AggFunc::COUNT) {
+                        if (col.name == "*") {
+                            counts[i]++;
+                        } else {
+                            int idx = columnIndex(*t, col.name);
+                            if (idx >= 0 && !row[idx].is_null()) counts[i]++;
+                        }
+                    } else {
+                        // SUM или AVG
+                        int idx = columnIndex(*t, col.name);
+                        if (idx >= 0 && !row[idx].is_null() && row[idx].type() == Value::Type::INT) {
+                            sums[i] += static_cast<double>(row[idx].as_int());
+                            counts[i]++;
+                            has_non_null[i] = true;
+                        }
+                    }
+                }
+            }
+
+            // Вывод одной строки с результатами
+            std::cout << "[";
+            std::cout << "{";
+            for (size_t i = 0; i < selected.size(); ++i) {
+                if (i) std::cout << ",";
+                const auto& col = selected[i];
+
+                // Формируем имя ключа в JSON
+                std::string key;
+                if (!col.alias.empty()) {
+                    key = col.alias;
+                } else if (col.agg != AggFunc::NONE) {
+                    std::string func_name;
+                    switch (col.agg) {
+                        case AggFunc::SUM:   func_name = "SUM"; break;
+                        case AggFunc::COUNT: func_name = "COUNT"; break;
+                        case AggFunc::AVG:   func_name = "AVG"; break;
+                        default: func_name = "AGG"; break;
+                    }
+                    key = func_name + "(" + col.name + ")";
+                } else {
+                    key = col.name;
+                }
+
+                std::cout << "\"" << jsonEscape(key) << "\":";
+
+                if (col.agg == AggFunc::COUNT) {
+                    std::cout << counts[i];
+                } else if (col.agg == AggFunc::SUM) {
+                    if (has_non_null[i]) std::cout << static_cast<int64_t>(sums[i]);
+                    else std::cout << "null";
+                } else if (col.agg == AggFunc::AVG) {
+                    if (counts[i] > 0) {
+                        double avg = sums[i] / static_cast<double>(counts[i]);
+                        // Выводим как целое, если дробная часть нулевая
+                        if (avg == static_cast<int64_t>(avg))
+                            std::cout << static_cast<int64_t>(avg);
+                        else
+                            std::cout << std::fixed << std::setprecision(2) << avg;
+                    } else {
+                        std::cout << "null";
+                    }
+                } else {
+                    // Обычная колонка в агрегатном запросе — выводим null
+                    // (по стандарту SQL это некорректно, но для безопасности)
+                    std::cout << "null";
+                }
+            }
+            std::cout << "}";
+            std::cout << "]" << std::endl;
+            return true;
+        }
+        // ============================================================
+
+        // Обычный SELECT без агрегатов (без изменений)
         std::cout << "[";
         bool first_row = true;
         for (const auto& rid : rids) {

@@ -36,17 +36,11 @@ bool isKeyword(const Token& t, const std::string& keyword) {
 }
 
 // ============================================================
-// РЕКУРСИВНЫЙ СПУСК ДЛЯ УСЛОВИЙ (Задание 11)
-// Грамматика:
-//   or_expr  -> and_expr ( OR and_expr )*
-//   and_expr -> atom ( AND atom )*
-//   atom     -> '(' or_expr ')' | comparison | between | like
+// Рекурсивный спуск для условий (Задание 11)
 // ============================================================
-
 ConditionPtr Parser::parseOrExpr() {
     auto left = parseAndExpr();
     if (!left) return nullptr;
-
     while (isKeyword(peek(), "OR")) {
         consume();
         auto right = parseAndExpr();
@@ -59,11 +53,7 @@ ConditionPtr Parser::parseOrExpr() {
 ConditionPtr Parser::parseAndExpr() {
     auto left = parseAtom();
     if (!left) return nullptr;
-
     while (isKeyword(peek(), "AND")) {
-        // ВАЖНО: Не путать AND как логический оператор с AND внутри BETWEEN
-        // Но поскольку BETWEEN парсится целиком в parseAtom(),
-        // здесь мы видим только логический AND
         consume();
         auto right = parseAtom();
         if (!right) return nullptr;
@@ -73,7 +63,6 @@ ConditionPtr Parser::parseAndExpr() {
 }
 
 ConditionPtr Parser::parseAtom() {
-    // Скобки
     if (match(TokenType::LPAREN)) {
         auto expr = parseOrExpr();
         if (!expr) return nullptr;
@@ -82,27 +71,19 @@ ConditionPtr Parser::parseAtom() {
         return expr;
     }
 
-    // Левый операнд
     Operand left;
     if (!parseOperand(left)) return nullptr;
 
     Token op = peek();
-
-    // BETWEEN
     if (isKeyword(op, "BETWEEN")) {
         consume();
         Operand low, high;
         if (!parseOperand(low)) return nullptr;
-        if (!isKeyword(peek(), "AND")) {
-            error_ = "Syntax Error: Expected AND in BETWEEN expression";
-            return nullptr;
-        }
-        consume(); // AND
+        if (!isKeyword(peek(), "AND")) { error_ = "Syntax Error: Expected AND in BETWEEN expression"; return nullptr; }
+        consume();
         if (!parseOperand(high)) return nullptr;
         return ConditionNode::makeComparison(left, CondOp::BETWEEN, low, high);
     }
-
-    // LIKE
     if (isKeyword(op, "LIKE")) {
         consume();
         Operand pattern;
@@ -110,7 +91,6 @@ ConditionPtr Parser::parseAtom() {
         return ConditionNode::makeComparison(left, CondOp::LIKE, pattern);
     }
 
-    // Операторы сравнения
     CondOp condOp;
     if (match(TokenType::OP_EQ))       condOp = CondOp::EQ;
     else if (match(TokenType::OP_NEQ)) condOp = CondOp::NEQ;
@@ -118,77 +98,63 @@ ConditionPtr Parser::parseAtom() {
     else if (match(TokenType::OP_GT))  condOp = CondOp::GT;
     else if (match(TokenType::OP_LTE)) condOp = CondOp::LTE;
     else if (match(TokenType::OP_GTE)) condOp = CondOp::GTE;
-    else {
-        error_ = "Syntax Error: Expected comparison operator at position " + std::to_string(peek().position);
-        return nullptr;
-    }
+    else { error_ = "Syntax Error: Expected comparison operator at position " + std::to_string(peek().position); return nullptr; }
 
     Operand right;
     if (!parseOperand(right)) return nullptr;
-
     return ConditionNode::makeComparison(left, condOp, right);
 }
 
 // ============================================================
-// ОСТАЛЬНЫЕ МЕТОДЫ ПАРСЕРА (без изменений в логике,
-// только замена parseCondition на parseOrExpr)
+// Основной парсер
 // ============================================================
-
 CommandPtr Parser::parse(const std::vector<Token>& tokens) {
     tokens_ = tokens;
     current_pos_ = 0;
     error_.clear();
-
     if (tokens_.empty()) return nullptr;
 
-    Token first = peek();
     auto toUpper = [](const std::string& s) {
         std::string res = s;
         std::transform(res.begin(), res.end(), res.begin(), ::toupper);
         return res;
     };
-    std::string val = toUpper(first.value);
+    std::string val = toUpper(tokens_[0].value);
 
     if (val == "CREATE") {
         consume();
-        std::string secondVal = toUpper(peek().value);
-        if (secondVal == "DATABASE") return parseCreateDatabase();
-        if (secondVal == "TABLE") return parseCreateTable();
+        std::string sv = toUpper(peek().value);
+        if (sv == "DATABASE") return parseCreateDatabase();
+        if (sv == "TABLE") return parseCreateTable();
         error_ = "Syntax Error: Expected DATABASE or TABLE after CREATE";
     }
     else if (val == "DROP") {
         consume();
-        std::string secondVal = toUpper(peek().value);
-        if (secondVal == "DATABASE") return parseDropDatabase();
-        if (secondVal == "TABLE") return parseDropTable();
+        std::string sv = toUpper(peek().value);
+        if (sv == "DATABASE") return parseDropDatabase();
+        if (sv == "TABLE") return parseDropTable();
         error_ = "Syntax Error: Expected DATABASE or TABLE after DROP";
     }
     else if (val == "DELETE") { consume(); return parseDelete(); }
-    else if (val == "USE") { return parseUseDatabase(); }
-    else if (val == "INSERT") { consume(); return parseInsert(); }
-    else if (val == "UPDATE") { consume(); return parseUpdate(); }
-    else if (val == "SELECT") { consume(); return parseSelect(); }
-    else { error_ = "Syntax Error: Unknown command '" + first.value + "'"; }
-
+    else if (val == "USE")     { return parseUseDatabase(); }
+    else if (val == "INSERT")  { consume(); return parseInsert(); }
+    else if (val == "UPDATE")  { consume(); return parseUpdate(); }
+    else if (val == "SELECT")  { consume(); return parseSelect(); }
+    else { error_ = "Syntax Error: Unknown command '" + tokens_[0].value + "'"; }
     return nullptr;
 }
 
 CommandPtr Parser::parseCreateDatabase() {
     expect(TokenType::KW_DATABASE);
     if (!error_.empty()) {
-        if (error_.find("Expected") != std::string::npos && isKeyword(peek(), "DATABASE")) {
-            consume(); error_.clear();
-        } else return nullptr;
+        if (error_.find("Expected") != std::string::npos && isKeyword(peek(), "DATABASE")) { consume(); error_.clear(); }
+        else return nullptr;
     }
     Token nameToken = consume();
-    if (nameToken.type != TokenType::IDENTIFIER) {
-        error_ = "Syntax Error: Expected database name after CREATE DATABASE"; return nullptr;
-    }
+    if (nameToken.type != TokenType::IDENTIFIER) { error_ = "Syntax Error: Expected database name after CREATE DATABASE"; return nullptr; }
     expect(TokenType::SEMICOLON);
     if (!error_.empty()) return nullptr;
-    if (storage_.databaseExists(nameToken.value)) {
-        error_ = "Semantic Error: Database '" + nameToken.value + "' already exists"; return nullptr;
-    }
+    if (storage_.databaseExists(nameToken.value)) { error_ = "Semantic Error: Database '" + nameToken.value + "' already exists"; return nullptr; }
     auto cmd = std::make_unique<CreateDatabaseCmd>();
     cmd->name = nameToken.value;
     storage_.createDatabase(cmd->name);
@@ -199,19 +165,14 @@ CommandPtr Parser::parseCreateDatabase() {
 CommandPtr Parser::parseDropDatabase() {
     expect(TokenType::KW_DATABASE);
     if (!error_.empty()) {
-        if (error_.find("Expected") != std::string::npos && isKeyword(peek(), "DATABASE")) {
-            consume(); error_.clear();
-        } else return nullptr;
+        if (error_.find("Expected") != std::string::npos && isKeyword(peek(), "DATABASE")) { consume(); error_.clear(); }
+        else return nullptr;
     }
     Token nameToken = consume();
-    if (nameToken.type != TokenType::IDENTIFIER) {
-        error_ = "Syntax Error: Expected database name after DROP DATABASE"; return nullptr;
-    }
+    if (nameToken.type != TokenType::IDENTIFIER) { error_ = "Syntax Error: Expected database name after DROP DATABASE"; return nullptr; }
     expect(TokenType::SEMICOLON);
     if (!error_.empty()) return nullptr;
-    if (!storage_.databaseExists(nameToken.value)) {
-        error_ = "Semantic Error: Database '" + nameToken.value + "' does not exist"; return nullptr;
-    }
+    if (!storage_.databaseExists(nameToken.value)) { error_ = "Semantic Error: Database '" + nameToken.value + "' does not exist"; return nullptr; }
     auto cmd = std::make_unique<DropDatabaseCmd>();
     cmd->name = nameToken.value;
     storage_.dropDatabase(cmd->name);
@@ -222,14 +183,10 @@ CommandPtr Parser::parseDropDatabase() {
 CommandPtr Parser::parseUseDatabase() {
     consume();
     Token nameToken = consume();
-    if (nameToken.type != TokenType::IDENTIFIER) {
-        error_ = "Syntax Error: Expected database name after USE"; return nullptr;
-    }
+    if (nameToken.type != TokenType::IDENTIFIER) { error_ = "Syntax Error: Expected database name after USE"; return nullptr; }
     expect(TokenType::SEMICOLON);
     if (!error_.empty()) return nullptr;
-    if (!storage_.databaseExists(nameToken.value)) {
-        error_ = "Semantic Error: Database '" + nameToken.value + "' does not exist"; return nullptr;
-    }
+    if (!storage_.databaseExists(nameToken.value)) { error_ = "Semantic Error: Database '" + nameToken.value + "' does not exist"; return nullptr; }
     auto cmd = std::make_unique<UseDatabaseCmd>();
     cmd->name = nameToken.value;
     storage_.useDatabase(cmd->name);
@@ -240,18 +197,13 @@ CommandPtr Parser::parseUseDatabase() {
 CommandPtr Parser::parseCreateTable() {
     consume();
     Token nameToken = consume();
-    if (nameToken.type != TokenType::IDENTIFIER) {
-        error_ = "Syntax Error: Expected table name after CREATE TABLE"; return nullptr;
-    }
+    if (nameToken.type != TokenType::IDENTIFIER) { error_ = "Syntax Error: Expected table name after CREATE TABLE"; return nullptr; }
     expect(TokenType::LPAREN);
     if (!error_.empty()) return nullptr;
-
     std::vector<ColumnDef> columns;
     while (peek().type != TokenType::RPAREN && peek().type != TokenType::END_OF_FILE) {
         Token colName = consume();
-        if (colName.type != TokenType::IDENTIFIER) {
-            error_ = "Syntax Error: Expected column name"; return nullptr;
-        }
+        if (colName.type != TokenType::IDENTIFIER) { error_ = "Syntax Error: Expected column name"; return nullptr; }
         Token typeToken = consume();
         if (!isKeyword(typeToken, "INT") && !isKeyword(typeToken, "STRING")) {
             error_ = "Syntax Error: Expected INT or STRING type for column '" + colName.value + "'"; return nullptr;
@@ -271,11 +223,8 @@ CommandPtr Parser::parseCreateTable() {
     if (!error_.empty()) return nullptr;
     expect(TokenType::SEMICOLON);
     if (!error_.empty()) return nullptr;
-
     std::string db = storage_.getCurrentDatabase();
-    if (db.empty()) {
-        error_ = "Semantic Error: No database selected. Use USE [database]; first."; return nullptr;
-    }
+    if (db.empty()) { error_ = "Semantic Error: No database selected. Use USE [database]; first."; return nullptr; }
     if (storage_.tableExists(db, nameToken.value)) {
         error_ = "Semantic Error: Table '" + nameToken.value + "' already exists in database '" + db + "'"; return nullptr;
     }
@@ -291,17 +240,13 @@ CommandPtr Parser::parseInsert() {
     expect(TokenType::KW_INTO);
     if (!error_.empty()) return nullptr;
     std::string db, table;
-    if (!parseTableReference(db, table)) {
-        error_ = "Syntax Error: Expected table name after INSERT INTO"; return nullptr;
-    }
+    if (!parseTableReference(db, table)) { error_ = "Syntax Error: Expected table name after INSERT INTO"; return nullptr; }
     std::vector<std::string> colNames;
     if (peek().type == TokenType::LPAREN) {
         consume();
         while (peek().type != TokenType::RPAREN) {
             Token col = consume();
-            if (col.type != TokenType::IDENTIFIER) {
-                error_ = "Syntax Error: Expected column name in list"; return nullptr;
-            }
+            if (col.type != TokenType::IDENTIFIER) { error_ = "Syntax Error: Expected column name in list"; return nullptr; }
             colNames.push_back(col.value);
             if (peek().type == TokenType::COMMA) consume();
         }
@@ -309,9 +254,7 @@ CommandPtr Parser::parseInsert() {
         if (!error_.empty()) return nullptr;
     }
     Token valToken = consume();
-    if (!isKeyword(valToken, "VALUE")) {
-        error_ = "Syntax Error: Expected VALUE keyword"; return nullptr;
-    }
+    if (!isKeyword(valToken, "VALUE")) { error_ = "Syntax Error: Expected VALUE keyword"; return nullptr; }
     std::vector<std::vector<Value>> rows;
     while (peek().type == TokenType::LPAREN) {
         consume();
@@ -335,9 +278,7 @@ CommandPtr Parser::parseInsert() {
     if (!error_.empty()) return nullptr;
     if (db.empty()) db = storage_.getCurrentDatabase();
     if (db.empty()) { error_ = "Semantic Error: No database selected."; return nullptr; }
-    if (!storage_.tableExists(db, table)) {
-        error_ = "Semantic Error: Table '" + table + "' does not exist"; return nullptr;
-    }
+    if (!storage_.tableExists(db, table)) { error_ = "Semantic Error: Table '" + table + "' does not exist"; return nullptr; }
     auto cmd = std::make_unique<InsertCmd>();
     cmd->table_name = table;
     cmd->column_names = colNames;
@@ -349,16 +290,12 @@ CommandPtr Parser::parseInsert() {
 CommandPtr Parser::parseDropTable() {
     consume();
     std::string db, table;
-    if (!parseTableReference(db, table)) {
-        error_ = "Syntax Error: Expected table name after DROP TABLE"; return nullptr;
-    }
+    if (!parseTableReference(db, table)) { error_ = "Syntax Error: Expected table name after DROP TABLE"; return nullptr; }
     expect(TokenType::SEMICOLON);
     if (!error_.empty()) return nullptr;
     if (db.empty()) db = storage_.getCurrentDatabase();
     if (db.empty()) { error_ = "Semantic Error: No database selected."; return nullptr; }
-    if (!storage_.tableExists(db, table)) {
-        error_ = "Semantic Error: Table '" + table + "' does not exist"; return nullptr;
-    }
+    if (!storage_.tableExists(db, table)) { error_ = "Semantic Error: Table '" + table + "' does not exist"; return nullptr; }
     auto cmd = std::make_unique<DropTableCmd>();
     cmd->table_name = table;
     storage_.dropTable(db, cmd->table_name);
@@ -371,7 +308,6 @@ CommandPtr Parser::parseDelete() {
     if (!error_.empty()) return nullptr;
     std::string db, table;
     if (!parseTableReference(db, table)) return nullptr;
-
     Condition cond;
     bool has_where = false;
     if (isKeyword(peek(), "WHERE")) {
@@ -380,20 +316,15 @@ CommandPtr Parser::parseDelete() {
         cond.root = parseOrExpr();
         if (!cond.root) return nullptr;
     }
-
     expect(TokenType::SEMICOLON);
     if (!error_.empty()) return nullptr;
     if (db.empty()) db = storage_.getCurrentDatabase();
     if (db.empty()) { error_ = "Semantic Error: No database selected."; return nullptr; }
-    if (!storage_.tableExists(db, table)) {
-        error_ = "Semantic Error: Table '" + table + "' does not exist"; return nullptr;
-    }
-
+    if (!storage_.tableExists(db, table)) { error_ = "Semantic Error: Table '" + table + "' does not exist"; return nullptr; }
     auto cmd = std::make_unique<DeleteCmd>();
     cmd->table_name = table;
     cmd->has_where = has_where;
     cmd->where = cond;
-
     if (!storage_.deleteRows(db, table, cond, has_where)) return nullptr;
     return cmd;
 }
@@ -403,24 +334,18 @@ CommandPtr Parser::parseUpdate() {
     if (!parseTableReference(db, table)) return nullptr;
     expect(TokenType::KW_SET);
     if (!error_.empty()) return nullptr;
-
     std::vector<std::pair<std::string, Value>> set_clause;
     while (true) {
         Token colToken = consume();
-        if (colToken.type != TokenType::IDENTIFIER) {
-            error_ = "Syntax Error: Expected column name in SET clause"; return nullptr;
-        }
+        if (colToken.type != TokenType::IDENTIFIER) { error_ = "Syntax Error: Expected column name in SET clause"; return nullptr; }
         expect(TokenType::ASSIGN);
         if (!error_.empty()) return nullptr;
         Operand operand;
         if (!parseOperand(operand)) return nullptr;
-        if (operand.is_column) {
-            error_ = "Syntax Error: SET value must be a constant"; return nullptr;
-        }
+        if (operand.is_column) { error_ = "Syntax Error: SET value must be a constant"; return nullptr; }
         set_clause.push_back({colToken.value, operand.value});
         if (peek().type == TokenType::COMMA) consume(); else break;
     }
-
     Condition cond;
     bool has_where = false;
     if (isKeyword(peek(), "WHERE")) {
@@ -429,50 +354,93 @@ CommandPtr Parser::parseUpdate() {
         cond.root = parseOrExpr();
         if (!cond.root) return nullptr;
     }
-
     expect(TokenType::SEMICOLON);
     if (!error_.empty()) return nullptr;
     if (db.empty()) db = storage_.getCurrentDatabase();
     if (db.empty()) { error_ = "Semantic Error: No database selected."; return nullptr; }
-    if (!storage_.tableExists(db, table)) {
-        error_ = "Semantic Error: Table '" + table + "' does not exist"; return nullptr;
-    }
-
+    if (!storage_.tableExists(db, table)) { error_ = "Semantic Error: Table '" + table + "' does not exist"; return nullptr; }
     auto cmd = std::make_unique<UpdateCmd>();
     cmd->table_name = table;
     cmd->set_clause = set_clause;
     cmd->has_where = has_where;
     cmd->where = cond;
-
     if (!storage_.updateRows(db, table, set_clause, cond, has_where)) return nullptr;
     return cmd;
 }
 
+// ============================================================
+// Задание 12: Парсинг агрегатных функций в SELECT
+// ============================================================
 CommandPtr Parser::parseSelect() {
     auto cmd = std::make_unique<SelectCmd>();
     std::vector<SelectColumn> cols;
 
     if (peek().type == TokenType::ASTERISK) {
         consume();
-        cols.push_back({"*", "", true});
+        cols.push_back({"*", "", true, AggFunc::NONE});
     } else {
         while (true) {
-            Token colToken = consume();
-            if (colToken.type != TokenType::IDENTIFIER) {
-                error_ = "Syntax Error: Expected column name after SELECT"; return nullptr;
-            }
             SelectColumn col;
-            col.name = colToken.value;
+            Token tok = peek();
+
+            // Проверяем агрегатные функции: SUM(...), COUNT(...), AVG(...)
+            if (tok.type == TokenType::IDENTIFIER) {
+                std::string upper;
+                {
+                    upper = tok.value;
+                    std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
+                }
+
+                if ((upper == "SUM" || upper == "COUNT" || upper == "AVG") &&
+                    current_pos_ + 1 < tokens_.size() && tokens_[current_pos_ + 1].type == TokenType::LPAREN) {
+
+                    consume(); // имя функции
+                    consume(); // (
+
+                    if (upper == "SUM") col.agg = AggFunc::SUM;
+                    else if (upper == "COUNT") col.agg = AggFunc::COUNT;
+                    else col.agg = AggFunc::AVG;
+
+                    // COUNT(*) — специальный случай
+                    if (col.agg == AggFunc::COUNT && peek().type == TokenType::ASTERISK) {
+                        consume(); // *
+                        col.name = "*";
+                    } else {
+                        Token argToken = consume();
+                        if (argToken.type != TokenType::IDENTIFIER) {
+                            error_ = "Syntax Error: Expected column name as argument to " + upper;
+                            return nullptr;
+                        }
+                        col.name = argToken.value;
+                    }
+
+                    expect(TokenType::RPAREN);
+                    if (!error_.empty()) return nullptr;
+                } else {
+                    // Обычная колонка
+                    consume();
+                    col.name = tok.value;
+                    col.agg = AggFunc::NONE;
+                }
+            } else {
+                error_ = "Syntax Error: Expected column name or aggregate function after SELECT";
+                return nullptr;
+            }
+
+            // Алиас AS
             if (isKeyword(peek(), "AS")) {
                 consume();
                 Token aliasToken = consume();
                 if (aliasToken.type != TokenType::IDENTIFIER) {
-                    error_ = "Syntax Error: Expected alias name after AS"; return nullptr;
+                    error_ = "Syntax Error: Expected alias name after AS";
+                    return nullptr;
                 }
                 col.alias = aliasToken.value;
             }
+
             cols.push_back(col);
-            if (peek().type == TokenType::COMMA) consume(); else break;
+            if (peek().type == TokenType::COMMA) consume();
+            else break;
         }
     }
 
@@ -506,15 +474,11 @@ CommandPtr Parser::parseSelect() {
 
 bool Parser::parseTableReference(std::string& database, std::string& table) {
     Token name = consume();
-    if (name.type != TokenType::IDENTIFIER) {
-        error_ = "Syntax Error: Expected table name"; return false;
-    }
+    if (name.type != TokenType::IDENTIFIER) { error_ = "Syntax Error: Expected table name"; return false; }
     if (peek().type == TokenType::DOT) {
         consume();
         Token tableToken = consume();
-        if (tableToken.type != TokenType::IDENTIFIER) {
-            error_ = "Syntax Error: Expected table name after '.'"; return false;
-        }
+        if (tableToken.type != TokenType::IDENTIFIER) { error_ = "Syntax Error: Expected table name after '.'"; return false; }
         database = name.value;
         table = tableToken.value;
     } else {
