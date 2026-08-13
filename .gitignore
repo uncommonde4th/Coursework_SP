@@ -17,6 +17,7 @@ cmake-build-*/
 *.idx
 *.db
 data/
+sysdb_data/
 
 # Executable
 sysdb

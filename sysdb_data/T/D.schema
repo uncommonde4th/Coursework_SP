@@ -1,4 +1,0 @@
-id	INT	0	1
-name	STRING	0	0
-age	INT	0	0
-description	STRING	0	1

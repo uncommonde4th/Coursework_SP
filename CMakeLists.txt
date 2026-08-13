@@ -40,3 +40,15 @@ target_include_directories(sysdb PRIVATE
 
 # Ссылка на pthread
 target_link_libraries(sysdb pthread)
+
+add_executable(string_interning_test
+    tests/string_interning_test.cpp
+    src/core/types/include/value.hpp  # если есть
+)
+
+target_include_directories(string_interning_test PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/types/include
+)
+
+target_link_libraries(string_interning_test pthread)
