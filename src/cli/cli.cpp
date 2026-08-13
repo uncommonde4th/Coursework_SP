@@ -5,34 +5,48 @@
 #include <algorithm>
 #include <thread>
 #include <chrono>
+#include <iomanip>
 #include "parser/tokenizer.hpp"
-#include "core/utils/access_logger.hpp" // === Задание 7 ===
+#include "core/utils/access_logger.hpp"
+#include "core/utils/telemetry.hpp"
 
 CLI::CLI() : current_database_(""), storage_(), parser_(storage_) {
-    // === Задание 7: Инициализация логгера ===
     if (!sysdb::AccessLogger::instance().initialize("sysdb_data/access.log")) {
         std::cerr << "[WARN] Failed to initialize access log" << std::endl;
     }
-    // ========================================
+    sysdb::TelemetryCollector::instance().start();
 }
 
-// === Задание 7: Корректное завершение логгера ===
 CLI::~CLI() {
     sysdb::AccessLogger::instance().shutdown();
+    sysdb::TelemetryCollector::instance().stop();
 }
-// ==================================================
+
+static bool startsWithLetter(const std::string& s) {
+    if (s.empty()) return false;
+    char c = s[0];
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+}
 
 void CLI::runInteractive() {
-    // === Задание 7 ===
     sysdb::AccessLogger::instance().setClientId("interactive");
-    // =================
 
     std::cout << "SysDB Interactive Mode" << std::endl;
     std::cout << "Type 'exit' or 'quit' to exit." << std::endl;
     std::cout << std::endl;
 
+    std::string accumulated_command = "";
+
     while (true) {
-        std::cout << "sysdb> ";
+        std::cerr.flush();
+        std::cout.flush();
+
+        // Если это начало новой команды — печатаем "sysdb> ", если продолжение многострочного ввода — "... "
+        if (accumulated_command.empty()) {
+            std::cout << "sysdb> " << std::flush;
+        } else {
+            std::cout << "... " << std::flush;
+        }
 
         std::string line;
         if (!std::getline(std::cin, line)) {
@@ -45,48 +59,37 @@ void CLI::runInteractive() {
             break;
         }
 
-        if (line.empty()) continue;
+        // Trim текущей строки
+        size_t s = line.find_first_not_of(" \t\n\r");
+        if (s == std::string::npos) continue;
+        size_t e = line.find_last_not_of(" \t\n\r");
+        std::string trimmed = line.substr(s, e - s + 1);
 
-        std::string command = line;
-
-        std::string trimmed = command;
-        trimmed.erase(trimmed.find_last_not_of(" \t\n\r") + 1);
-
-        if (!trimmed.empty() && trimmed.back() == ';') {
-            processCommand(command);
-            continue;
+        if (accumulated_command.empty()) {
+            accumulated_command = trimmed;
+        } else {
+            accumulated_command += " " + trimmed;
         }
 
-        while (true) {
-            std::cout << "... ";
-            if (!std::getline(std::cin, line)) {
-                std::cout << std::endl;
-                break;
-            }
+        // Автодобавление ; если команда начинается с буквы и еще не имеет ';' на конце
+        if (accumulated_command.back() != ';' && startsWithLetter(accumulated_command)) {
+            // Для интерактивного режима автоматически завершаем однострочные команды
+            accumulated_command += ";";
+        }
 
-            if (isExitCommand(line)) {
-                std::cout << "Goodbye!" << std::endl;
-                return;
-            }
+        // Если команда завершена на ';'
+        if (accumulated_command.back() == ';') {
+            processCommand(accumulated_command);
+            accumulated_command.clear(); // Сбрасываем буфер команды
 
-            if (!command.empty()) command += " ";
-            command += line;
-
-            trimmed = command;
-            trimmed.erase(trimmed.find_last_not_of(" \t\n\r") + 1);
-
-            if (!trimmed.empty() && trimmed.back() == ';') {
-                processCommand(command);
-                break;
-            }
+            std::cerr.flush();
+            std::cout.flush();
         }
     }
 }
 
 void CLI::runBatchMode(const std::string& filename) {
-    // === Задание 7 ===
     sysdb::AccessLogger::instance().setClientId(filename);
-    // =================
 
     std::ifstream file(filename);
     if (!file.is_open()) {
@@ -102,12 +105,11 @@ void CLI::runBatchMode(const std::string& filename) {
 
     while (std::getline(file, line)) {
         if (line.empty() || line.substr(0, 2) == "--") continue;
-
         if (!current_command.empty()) current_command += " ";
         current_command += line;
 
-        std::string trimmed = current_command;
-        trimmed.erase(trimmed.find_last_not_of(" \t\n\r") + 1);
+        size_t e = current_command.find_last_not_of(" \t\n\r");
+        std::string trimmed = (e != std::string::npos) ? current_command.substr(0, e + 1) : "";
 
         if (!trimmed.empty() && trimmed.back() == ';') {
             processCommand(current_command);
@@ -124,36 +126,78 @@ void CLI::runBatchMode(const std::string& filename) {
 }
 
 void CLI::processCommand(const std::string& command) {
-    // === Задание 7: Замер времени выполнения ===
+    // Защита от пустых / мусорных команд
+    {
+        std::string stripped = command;
+        stripped.erase(std::remove_if(stripped.begin(), stripped.end(),
+            [](char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == ';'; }),
+            stripped.end());
+        if (stripped.empty()) return;
+    }
+
     auto start = std::chrono::system_clock::now();
     std::string status = "OK";
-    // ============================================
+
+    // Встроенная команда METRICS
+    {
+        std::string upper_cmd = command;
+        std::transform(upper_cmd.begin(), upper_cmd.end(), upper_cmd.begin(), ::toupper);
+        upper_cmd.erase(std::remove_if(upper_cmd.begin(), upper_cmd.end(),
+            [](char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }),
+            upper_cmd.end());
+
+        if (upper_cmd == "METRICS;") {
+            printMetrics();
+            return;
+        }
+    }
 
     try {
         sysdb::Tokenizer tokenizer(command);
         auto tokens = tokenizer.tokenize();
         if (tokenizer.hasError()) {
             status = tokenizer.getError();
-            std::cerr << status << std::endl;
         } else {
             parser_.parse(tokens);
             if (parser_.hasError()) {
                 status = parser_.getError();
-                std::cerr << status << std::endl;
             }
         }
     } catch (const std::exception& e) {
         status = std::string("Exception: ") + e.what();
-        std::cerr << "Error: " << e.what() << std::endl;
     } catch (...) {
         status = "Unknown failure";
-        std::cerr << "Error: unknown failure" << std::endl;
     }
 
-    // === Задание 7: Отправка записи в лог ===
+    // === КЛЮЧЕВОЕ ИЗМЕНЕНИЕ ===
+    // НЕ выводим ошибку из CLI, если она уже была выведена StorageStub.
+    // StorageStub выводит ошибки через std::cerr внутри своих методов.
+    // Дублирование вывода вызывает рассинхронизацию потоков.
+    // Вместо этого: просто убеждаемся, что stderr сброшен.
+    // Если ошибка пришла из Tokenizer (не из Storage), выводим её здесь.
+    if (status != "OK") {
+        // Проверяем, напечатал ли Storage уже что-то в свой error buffer.
+        // Если status НЕ начинается с [STORAGE], и Storage ничего сам не печатал — выводим статус от парсера
+        bool printedByStorage = (!storage_.getError().empty() && status.find(storage_.getError()) != std::string::npos);
+
+        if (!printedByStorage) {
+            std::cerr << status << std::endl;
+        } else {
+            // Если Storage печатал сам, убеждаемся, что он завершил строку!
+            std::cerr << std::endl;
+        }
+        std::cerr.flush();
+        std::cout.flush();
+    }
+    // ============================
+
     auto end = std::chrono::system_clock::now();
+
     logQuery(command, status, start, end);
-    // =========================================
+
+    double latency_ms = std::chrono::duration<double, std::milli>(end - start).count();
+    bool is_error = (status != "OK");
+    sysdb::TelemetryCollector::instance().recordRequest(latency_ms, is_error);
 }
 
 bool CLI::isExitCommand(const std::string& command) {
@@ -165,7 +209,6 @@ bool CLI::isExitCommand(const std::string& command) {
     return (lower_cmd == "exit" || lower_cmd == "quit");
 }
 
-// === Задание 7: Реализация логирования ===
 void CLI::logQuery(const std::string& query, const std::string& status,
                    std::chrono::system_clock::time_point start,
                    std::chrono::system_clock::time_point end) {
@@ -182,4 +225,16 @@ void CLI::logQuery(const std::string& query, const std::string& status,
 
     sysdb::AccessLogger::instance().log(std::move(entry));
 }
-// ==========================================
+
+void CLI::printMetrics() {
+    auto snap = sysdb::TelemetryCollector::instance().getSnapshot();
+
+    std::cout << std::fixed << std::setprecision(2);
+    std::cout << "{"
+              << "\"current_rps\":" << snap.current_rps << ","
+              << "\"avg_rps_10min\":" << snap.avg_rps_10min << ","
+              << "\"max_rps_10min\":" << snap.max_rps_10min << ","
+              << "\"avg_latency_10sec_ms\":" << snap.avg_latency_10sec << ","
+              << "\"error_count_1min\":" << snap.error_count_1min
+              << "}" << std::endl;
+}
