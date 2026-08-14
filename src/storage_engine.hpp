@@ -451,23 +451,38 @@ public:
             }
         }
 
-        // 2) Логически очищаем текущее содержимое таблицы (не трогая сами
-        //    файлы .dat/.idx как файлы - работаем через штатные операции
-        //    удаления записи/индекса).
-        for (const auto& rid : t->records->scan_all_records()) {
-            auto row = t->records->get_record(rid, makeSchema(*t));
-            if (row.empty()) continue;
-            t->records->delete_record(rid);
-            for (const auto& col : t->columns) {
-                if (!col.indexed) continue;
-                int idx = columnIndex(*t, col.name);
-                t->indexes[col.name]->remove(row[idx], rid);
-            }
+        t->records.reset();
+        for (auto& kv : t->indexes) kv.second.reset();
+
+        const auto path = tablePath(db, table);
+        std::error_code ec;
+        std::filesystem::remove(path.string() + ".dat", ec);
+        for (const auto& col : t->columns) {
+            if (col.indexed) std::filesystem::remove(path.string() + "." + col.name + ".idx", ec);
         }
 
-        // 3) Материализуем восстановленное состояние. Это не пользовательская
-        //    операция, а разворачивание уже записанной истории, поэтому в WAL
-        //    заново не пишем.
+        t->records = std::make_unique<RecordManager>(path.string());
+        if (!t->records->initialize()) {
+            setError("Failed to rebuild storage for table '" + table + "' during REVERT");
+            return false;
+        }
+        for (const auto& col : t->columns) {
+            if (!col.indexed) continue;
+            auto type = columnType(col);
+            const auto index_path = path.string() + "." + col.name;
+            auto index = std::make_unique<BPlusTree>(index_path, type);
+            if (!index->initialize()) {
+                setError("Failed to rebuild index for column '" + col.name + "' during REVERT");
+                return false;
+            }
+            t->indexes[col.name] = std::move(index);
+        }
+
+        // 3) Материализуем восстановленное состояние в порядке возрастания
+        //    исходного (старого) RID - на свежесозданном heap-файле это даёт
+        //    физический порядок слотов, совпадающий с исходным порядком
+        //    вставки. Это не пользовательская операция, а разворачивание уже
+        //    записанной истории, поэтому в WAL заново не пишем.
         for (auto& item : target) {
             auto& row = item.second;
             if (row.size() != t->columns.size()) continue; // защита от рассинхронизации схемы
@@ -523,7 +538,6 @@ private:
         return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
     }
 
-    // Разбирает yyyy.mm.dd-hh:mm:ss.msmsms в миллисекунды с эпохи (UTC).
     static int64_t parseTimestampToMs(const std::string& s, bool& ok) {
         ok = false;
         if (s.size() != 23 || s[4] != '.' || s[7] != '.' || s[10] != '-' ||
@@ -546,12 +560,9 @@ private:
             tmv.tm_hour = hour;
             tmv.tm_min = minute;
             tmv.tm_sec = sec;
+            tmv.tm_isdst = -1;
 
-#if defined(_WIN32)
-            time_t t = _mkgmtime(&tmv);
-#else
-            time_t t = timegm(&tmv);
-#endif
+            time_t t = std::mktime(&tmv);
             if (t == static_cast<time_t>(-1)) return 0;
 
             ok = true;
@@ -559,6 +570,7 @@ private:
         } catch (...) {
             return 0;
         }
+
     }
 
     static std::string walEscape(const std::string& s) {
