@@ -9,26 +9,25 @@
 
 class CLI {
 public:
-    // Конструктор
     CLI();
+    ~CLI();
 
-    // Запуск интерактивного режима
     void runInteractive();
-
-    // Запуск пакетного режима (чтение из файла)
     void runBatchMode(const std::string& filename);
 
 private:
-    // Чтение одной команды (может быть многострочной)
     std::string readCommand();
-
-    // Обработка команды (пока просто echo)
     void processCommand(const std::string& command);
-
-    // Проверка, является ли команда командой выхода
     bool isExitCommand(const std::string& command);
 
-    // Флаг текущего контекста (для USE database)
+    // Задание 7
+    void logQuery(const std::string& query, const std::string& status,
+                  std::chrono::system_clock::time_point start,
+                  std::chrono::system_clock::time_point end);
+
+    // Задание 8
+    void printMetrics();
+
     std::string current_database_;
     sysdb::StorageStub storage_;
     sysdb::Parser parser_;

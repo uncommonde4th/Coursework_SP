@@ -3,85 +3,95 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <thread>
+#include <chrono>
+#include <iomanip>
 #include "parser/tokenizer.hpp"
+#include "core/utils/access_logger.hpp"
+#include "core/utils/telemetry.hpp"
 
-CLI::CLI() : current_database_(""), storage_(), parser_(storage_) {}
+CLI::CLI() : current_database_(""), storage_(), parser_(storage_) {
+    if (!sysdb::AccessLogger::instance().initialize("sysdb_data/access.log")) {
+        std::cerr << "[WARN] Failed to initialize access log" << std::endl;
+    }
+    sysdb::TelemetryCollector::instance().start();
+}
+
+CLI::~CLI() {
+    sysdb::AccessLogger::instance().shutdown();
+    sysdb::TelemetryCollector::instance().stop();
+}
+
+static bool startsWithLetter(const std::string& s) {
+    if (s.empty()) return false;
+    char c = s[0];
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+}
 
 void CLI::runInteractive() {
+    sysdb::AccessLogger::instance().setClientId("interactive");
+
     std::cout << "SysDB Interactive Mode" << std::endl;
     std::cout << "Type 'exit' or 'quit' to exit." << std::endl;
     std::cout << std::endl;
 
-    while (true) {
-        std::cout << "sysdb> ";
+    std::string accumulated_command = "";
 
-        // Сначала читаем первую строку
+    while (true) {
+        std::cerr.flush();
+        std::cout.flush();
+
+        // Если это начало новой команды — печатаем "sysdb> ", если продолжение многострочного ввода — "... "
+        if (accumulated_command.empty()) {
+            std::cout << "sysdb> " << std::flush;
+        } else {
+            std::cout << "... " << std::flush;
+        }
+
         std::string line;
         if (!std::getline(std::cin, line)) {
-            // EOF достигнут (Ctrl+D)
             std::cout << std::endl;
             break;
         }
 
-        // Проверяем, не является ли это командой выхода
         if (isExitCommand(line)) {
             std::cout << "Goodbye!" << std::endl;
             break;
         }
 
-        // Если строка пустая, пропускаем
-        if (line.empty()) {
-            continue;
+        // Trim текущей строки
+        size_t s = line.find_first_not_of(" \t\n\r");
+        if (s == std::string::npos) continue;
+        size_t e = line.find_last_not_of(" \t\n\r");
+        std::string trimmed = line.substr(s, e - s + 1);
+
+        if (accumulated_command.empty()) {
+            accumulated_command = trimmed;
+        } else {
+            accumulated_command += " " + trimmed;
         }
 
-        // Начинаем накапливать команду
-        std::string command = line;
-
-        // Проверяем, заканчивается ли команда на ;
-        std::string trimmed = command;
-        trimmed.erase(trimmed.find_last_not_of(" \t\n\r") + 1);
-
-        // Если команда завершена, обрабатываем сразу
-        if (!trimmed.empty() && trimmed.back() == ';') {
-            processCommand(command);
-            continue;
+        // Автодобавление ; если команда начинается с буквы и еще не имеет ';' на конце
+        if (accumulated_command.back() != ';' && startsWithLetter(accumulated_command)) {
+            // Для интерактивного режима автоматически завершаем однострочные команды
+            accumulated_command += ";";
         }
 
-        // Иначе читаем продолжение
-        while (true) {
-            std::cout << "... ";
-            if (!std::getline(std::cin, line)) {
-                // EOF достигнут
-                std::cout << std::endl;
-                break;
-            }
+        // Если команда завершена на ';'
+        if (accumulated_command.back() == ';') {
+            processCommand(accumulated_command);
+            accumulated_command.clear(); // Сбрасываем буфер команды
 
-            // Проверяем на exit/quit в каждой новой строке
-            if (isExitCommand(line)) {
-                std::cout << "Goodbye!" << std::endl;
-                return;
-            }
-
-            if (!command.empty()) {
-                command += " ";
-            }
-            command += line;
-
-            // Проверяем завершение команды
-            trimmed = command;
-            trimmed.erase(trimmed.find_last_not_of(" \t\n\r") + 1);
-
-            if (!trimmed.empty() && trimmed.back() == ';') {
-                processCommand(command);
-                break;
-            }
+            std::cerr.flush();
+            std::cout.flush();
         }
     }
 }
 
 void CLI::runBatchMode(const std::string& filename) {
-    std::ifstream file(filename);
+    sysdb::AccessLogger::instance().setClientId(filename);
 
+    std::ifstream file(filename);
     if (!file.is_open()) {
         std::cerr << "Error: Cannot open file '" << filename << "'" << std::endl;
         return;
@@ -94,30 +104,19 @@ void CLI::runBatchMode(const std::string& filename) {
     std::string current_command;
 
     while (std::getline(file, line)) {
-        // Пропускаем пустые строки и комментарии (начинаются с --)
-        if (line.empty() || line.substr(0, 2) == "--") {
-            continue;
-        }
-
-        // Добавляем строку к текущей команде
-        if (!current_command.empty()) {
-            current_command += " ";
-        }
+        if (line.empty() || line.substr(0, 2) == "--") continue;
+        if (!current_command.empty()) current_command += " ";
         current_command += line;
 
-        // Проверяем, заканчивается ли команда на ;
-        // Удаляем пробелы в конце для проверки
-        std::string trimmed = current_command;
-        trimmed.erase(trimmed.find_last_not_of(" \t\n\r") + 1);
+        size_t e = current_command.find_last_not_of(" \t\n\r");
+        std::string trimmed = (e != std::string::npos) ? current_command.substr(0, e + 1) : "";
 
         if (!trimmed.empty() && trimmed.back() == ';') {
-            // Команда завершена
             processCommand(current_command);
             current_command.clear();
         }
     }
 
-    // Если осталась незавершённая команда
     if (!current_command.empty()) {
         std::cerr << "Warning: Incomplete command at end of file" << std::endl;
         processCommand(current_command);
@@ -127,35 +126,115 @@ void CLI::runBatchMode(const std::string& filename) {
 }
 
 void CLI::processCommand(const std::string& command) {
-    // Пока просто выводим команду обратно (echo)
-    // TODO: Здесь будет парсинг и выполнение команды
+    // Защита от пустых / мусорных команд
+    {
+        std::string stripped = command;
+        stripped.erase(std::remove_if(stripped.begin(), stripped.end(),
+            [](char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == ';'; }),
+            stripped.end());
+        if (stripped.empty()) return;
+    }
+
+    auto start = std::chrono::system_clock::now();
+    std::string status = "OK";
+
+    // Встроенная команда METRICS
+    {
+        std::string upper_cmd = command;
+        std::transform(upper_cmd.begin(), upper_cmd.end(), upper_cmd.begin(), ::toupper);
+        upper_cmd.erase(std::remove_if(upper_cmd.begin(), upper_cmd.end(),
+            [](char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }),
+            upper_cmd.end());
+
+        if (upper_cmd == "METRICS;") {
+            printMetrics();
+            return;
+        }
+    }
+
     try {
         sysdb::Tokenizer tokenizer(command);
         auto tokens = tokenizer.tokenize();
         if (tokenizer.hasError()) {
-            std::cerr << tokenizer.getError() << std::endl;
-            return;
-        }
-        parser_.parse(tokens);
-        if (parser_.hasError()) {
-            std::cerr << parser_.getError() << std::endl;
+            status = tokenizer.getError();
+        } else {
+            parser_.parse(tokens);
+            if (parser_.hasError()) {
+                status = parser_.getError();
+            }
         }
     } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
+        status = std::string("Exception: ") + e.what();
     } catch (...) {
-        std::cerr << "Error: unknown failure" << std::endl;
+        status = "Unknown failure";
     }
+
+    // === КЛЮЧЕВОЕ ИЗМЕНЕНИЕ ===
+    // НЕ выводим ошибку из CLI, если она уже была выведена StorageStub.
+    // StorageStub выводит ошибки через std::cerr внутри своих методов.
+    // Дублирование вывода вызывает рассинхронизацию потоков.
+    // Вместо этого: просто убеждаемся, что stderr сброшен.
+    // Если ошибка пришла из Tokenizer (не из Storage), выводим её здесь.
+    if (status != "OK") {
+        // Проверяем, напечатал ли Storage уже что-то в свой error buffer.
+        // Если status НЕ начинается с [STORAGE], и Storage ничего сам не печатал — выводим статус от парсера
+        bool printedByStorage = (!storage_.getError().empty() && status.find(storage_.getError()) != std::string::npos);
+
+        if (!printedByStorage) {
+            std::cerr << status << std::endl;
+        } else {
+            // Если Storage печатал сам, убеждаемся, что он завершил строку!
+            std::cerr << std::endl;
+        }
+        std::cerr.flush();
+        std::cout.flush();
+    }
+    // ============================
+
+    auto end = std::chrono::system_clock::now();
+
+    logQuery(command, status, start, end);
+
+    double latency_ms = std::chrono::duration<double, std::milli>(end - start).count();
+    bool is_error = (status != "OK");
+    sysdb::TelemetryCollector::instance().recordRequest(latency_ms, is_error);
 }
 
 bool CLI::isExitCommand(const std::string& command) {
-    // Приводим к нижнему регистру для сравнения
     std::string lower_cmd = command;
     std::transform(lower_cmd.begin(), lower_cmd.end(), lower_cmd.begin(), ::tolower);
-
-    // Удаляем пробелы, точку с запятой и другие символы
     lower_cmd.erase(std::remove_if(lower_cmd.begin(), lower_cmd.end(),
                                    [](char c) { return c == ' ' || c == ';' || c == '\t' || c == '\n' || c == '\r'; }),
                     lower_cmd.end());
-
     return (lower_cmd == "exit" || lower_cmd == "quit");
+}
+
+void CLI::logQuery(const std::string& query, const std::string& status,
+                   std::chrono::system_clock::time_point start,
+                   std::chrono::system_clock::time_point end) {
+    std::ostringstream handler_ss;
+    handler_ss << std::this_thread::get_id();
+
+    sysdb::LogEntry entry;
+    entry.timestamp_start = sysdb::AccessLogger::formatTime(start);
+    entry.timestamp_end = sysdb::AccessLogger::formatTime(end);
+    entry.client_id = sysdb::AccessLogger::instance().getClientId();
+    entry.handler_id = handler_ss.str();
+    entry.query_body = query;
+    entry.status = status;
+
+    sysdb::AccessLogger::instance().log(std::move(entry));
+}
+
+void CLI::printMetrics() {
+    auto snap = sysdb::TelemetryCollector::instance().getSnapshot();
+
+    std::cout << std::fixed << std::setprecision(2);
+    std::cout << "{"
+              << "\"current_rps\":" << snap.current_rps << ","
+              << "\"avg_rps_10min\":" << snap.avg_rps_10min << ","
+              << "\"max_rps_10min\":" << snap.max_rps_10min << ","
+              << "\"avg_latency_10sec_ms\":" << snap.avg_latency_10sec << ","
+              << "\"error_count_1min\":" << snap.error_count_1min
+              << "}" << std::endl;
 }
