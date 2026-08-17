@@ -10,7 +10,6 @@
 namespace sysdb {
 
     enum class CommandType {
-<<<<<<< HEAD
         CREATE_DATABASE,
         DROP_DATABASE,
         USE_DATABASE,
@@ -22,11 +21,6 @@ namespace sysdb {
         SELECT_CMD,
         REVERT_CMD,
         UNKNOWN
-=======
-        CREATE_DATABASE, DROP_DATABASE, USE_DATABASE,
-        CREATE_TABLE, DROP_TABLE, INSERT,
-        DELETE_CMD, UPDATE_CMD, SELECT_CMD, UNKNOWN
->>>>>>> additional_tasks_2
     };
 
     struct Command {

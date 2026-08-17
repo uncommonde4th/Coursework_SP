@@ -28,6 +28,23 @@ static bool startsWithLetter(const std::string& s) {
     return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 }
 
+// Считает баланс скобок в строке, игнорируя скобки внутри "строковых
+// литералов" в двойных кавычках. Нужно, чтобы отличить "однострочную
+// команду без ;" (баланс 0 - можно смело дописывать ;) от ещё не
+// законченной многострочной команды вроде "CREATE TABLE users (" (баланс
+// 1 - скобка ещё не закрыта, продолжаем накапливать строки).
+static int parenBalance(const std::string& s) {
+    int depth = 0;
+    bool in_string = false;
+    for (char c : s) {
+        if (c == '"') { in_string = !in_string; continue; }
+        if (in_string) continue;
+        if (c == '(') ++depth;
+        else if (c == ')') --depth;
+    }
+    return depth;
+}
+
 void CLI::runInteractive() {
     sysdb::AccessLogger::instance().setClientId("interactive");
 
@@ -71,8 +88,14 @@ void CLI::runInteractive() {
             accumulated_command += " " + trimmed;
         }
 
-        // Автодобавление ; если команда начинается с буквы и еще не имеет ';' на конце
-        if (accumulated_command.back() != ';' && startsWithLetter(accumulated_command)) {
+        // Автодобавление ; если команда начинается с буквы, еще не имеет ';'
+        // на конце, И при этом скобки уже сбалансированы. Последнее условие
+        // критично: без него многострочный CREATE TABLE (со скобкой,
+        // открытой на первой строке и закрытой через несколько строк) обрывался
+        // прямо на первой строке, а последующие строки колонок разбирались
+        // как отдельные "неизвестные команды" - именно так и проявлялся баг.
+        if (accumulated_command.back() != ';' && startsWithLetter(accumulated_command)
+            && parenBalance(accumulated_command) <= 0) {
             // Для интерактивного режима автоматически завершаем однострочные команды
             accumulated_command += ";";
         }
@@ -87,6 +110,7 @@ void CLI::runInteractive() {
         }
     }
 }
+
 
 void CLI::runBatchMode(const std::string& filename) {
     sysdb::AccessLogger::instance().setClientId(filename);
@@ -126,6 +150,41 @@ void CLI::runBatchMode(const std::string& filename) {
 }
 
 void CLI::processCommand(const std::string& command) {
+    for (const auto& statement : splitStatements(command)) {
+        executeSingleStatement(statement);
+    }
+}
+
+// Разбивает входную строку на подстроки, каждая из которых заканчивается
+// на ';', учитывая, что ';' внутри "строкового литерала" не является
+// разделителем операторов.
+std::vector<std::string> CLI::splitStatements(const std::string& input) {
+    std::vector<std::string> result;
+    std::string current;
+    bool in_string = false;
+
+    for (char c : input) {
+        current += c;
+        if (c == '"') {
+            in_string = !in_string;
+        } else if (c == ';' && !in_string) {
+            result.push_back(current);
+            current.clear();
+        }
+    }
+
+    // Остаток без завершающего ';' (в норме такого быть не должно, но
+    // ничего не теряем - последующий парсер сам сообщит о синтаксической
+    // ошибке "нет ';'", если она там реально есть).
+    size_t s = current.find_first_not_of(" \t\r\n");
+    if (s != std::string::npos) {
+        result.push_back(current);
+    }
+
+    return result;
+}
+
+void CLI::executeSingleStatement(const std::string& command) {
     // Защита от пустых / мусорных команд
     {
         std::string stripped = command;
@@ -169,12 +228,6 @@ void CLI::processCommand(const std::string& command) {
         status = "Unknown failure";
     }
 
-    // === КЛЮЧЕВОЕ ИЗМЕНЕНИЕ ===
-    // НЕ выводим ошибку из CLI, если она уже была выведена StorageStub.
-    // StorageStub выводит ошибки через std::cerr внутри своих методов.
-    // Дублирование вывода вызывает рассинхронизацию потоков.
-    // Вместо этого: просто убеждаемся, что stderr сброшен.
-    // Если ошибка пришла из Tokenizer (не из Storage), выводим её здесь.
     if (status != "OK") {
         // Проверяем, напечатал ли Storage уже что-то в свой error buffer.
         // Если status НЕ начинается с [STORAGE], и Storage ничего сам не печатал — выводим статус от парсера

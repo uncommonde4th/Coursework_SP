@@ -135,7 +135,6 @@ CommandPtr Parser::parse(const std::vector<Token>& tokens) {
         if (sv == "TABLE") return parseDropTable();
         error_ = "Syntax Error: Expected DATABASE or TABLE after DROP";
     }
-<<<<<<< HEAD
     else if (val == "DELETE") {
         consume();
         return parseDelete();
@@ -160,17 +159,9 @@ CommandPtr Parser::parse(const std::vector<Token>& tokens) {
         return parseRevert();
     }
     else {
-        error_ = "Syntax Error: Unknown command '" + first.value + "'";
+        error_ = "Syntax Error: Unknown command '" + tokens_[0].value + "'";
     }
 
-=======
-    else if (val == "DELETE") { consume(); return parseDelete(); }
-    else if (val == "USE")     { return parseUseDatabase(); }
-    else if (val == "INSERT")  { consume(); return parseInsert(); }
-    else if (val == "UPDATE")  { consume(); return parseUpdate(); }
-    else if (val == "SELECT")  { consume(); return parseSelect(); }
-    else { error_ = "Syntax Error: Unknown command '" + tokens_[0].value + "'"; }
->>>>>>> additional_tasks_2
     return nullptr;
 }
 
@@ -241,12 +232,8 @@ CommandPtr Parser::parseCreateTable() {
         ColumnDef col;
         col.name = colName.value;
         col.type = typeToken.value;
-<<<<<<< HEAD
 
         while (isKeyword(peek(), "NOT_NULL") || isKeyword(peek(), "INDEXED") || isKeyword(peek(), "DEFAULT")) {
-=======
-        while (isKeyword(peek(), "NOT_NULL") || isKeyword(peek(), "INDEXED")) {
->>>>>>> additional_tasks_2
             Token mod = consume();
             if (isKeyword(mod, "NOT_NULL")) col.not_null = true;
             else if (isKeyword(mod, "INDEXED")) col.indexed = true;
@@ -382,16 +369,12 @@ CommandPtr Parser::parseDelete() {
 CommandPtr Parser::parseUpdate() {
     std::string db, table;
     if (!parseTableReference(db, table)) return nullptr;
-<<<<<<< HEAD
 
     // Резолвим БД пораньше, чтобы уметь искать схему таблицы уже при разборе
     // SET-выражений (нужно для SET col = DEFAULT).
     std::string resolved_db = db.empty() ? storage_.getCurrentDatabase() : db;
 
     expect(TokenType::KW_SET); // SET
-=======
-    expect(TokenType::KW_SET);
->>>>>>> additional_tasks_2
     if (!error_.empty()) return nullptr;
     std::vector<std::pair<std::string, Value>> set_clause;
     while (true) {
@@ -399,7 +382,6 @@ CommandPtr Parser::parseUpdate() {
         if (colToken.type != TokenType::IDENTIFIER) { error_ = "Syntax Error: Expected column name in SET clause"; return nullptr; }
         expect(TokenType::ASSIGN);
         if (!error_.empty()) return nullptr;
-<<<<<<< HEAD
 
         if (isKeyword(peek(), "DEFAULT")) {
             // SET col = DEFAULT - берём DEFAULT-значение колонки из CREATE TABLE (задание 10).
@@ -434,13 +416,6 @@ CommandPtr Parser::parseUpdate() {
 
         if (peek().type == TokenType::COMMA) consume();
         else break;
-=======
-        Operand operand;
-        if (!parseOperand(operand)) return nullptr;
-        if (operand.is_column) { error_ = "Syntax Error: SET value must be a constant"; return nullptr; }
-        set_clause.push_back({colToken.value, operand.value});
-        if (peek().type == TokenType::COMMA) consume(); else break;
->>>>>>> additional_tasks_2
     }
     Condition cond;
     bool has_where = false;

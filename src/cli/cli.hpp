@@ -18,6 +18,8 @@ public:
 private:
     std::string readCommand();
     void processCommand(const std::string& command);
+    void executeSingleStatement(const std::string& command);
+    static std::vector<std::string> splitStatements(const std::string& input);
     bool isExitCommand(const std::string& command);
 
     // Задание 7

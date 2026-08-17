@@ -82,7 +82,6 @@ public:
         table_data.columns = cols;
         for (const auto& col : cols) {
             if (col.indexed && col.type != "INT" && col.type != "int" && col.type != "STRING" && col.type != "string") {
-<<<<<<< HEAD
                 setError("Invalid indexed column type for '" + col.name + "'");
                 return;
             }
@@ -97,11 +96,7 @@ public:
             }
             if (col.indexed) {
                 table_data.indexes[col.name] = nullptr;
-=======
-                setError("Invalid indexed column type for '" + col.name + "'"); return;
->>>>>>> additional_tasks_2
             }
-            if (col.indexed) table_data.indexes[col.name] = nullptr;
         }
 
         const auto path = tablePath(db, table);
@@ -167,7 +162,6 @@ public:
             if (input.size() != mapping.size()) { setError("Value count does not match column count in INSERT"); rollbackInserted(*t, inserted); return false; }
             std::vector<Value> values(t->columns.size(), Value::make_null());
             for (size_t i = 0; i < input.size(); ++i) values[mapping[i]] = input[i];
-<<<<<<< HEAD
             for (size_t i = 0; i < t->columns.size(); ++i) {
                 if (!provided[i] && t->columns[i].has_default) values[i] = t->columns[i].default_value;
             }
@@ -175,9 +169,6 @@ public:
                 rollbackInserted(*t, inserted);
                 return false;
             }
-=======
-            if (!validateRow(*t, values)) { rollbackInserted(*t, inserted); return false; }
->>>>>>> additional_tasks_2
 
             for (const auto& col : t->columns) {
                 if (!col.indexed) continue;
@@ -237,6 +228,7 @@ public:
             appendWal(db, table, 'D', rid, {});
         }
         flushTable(db, table);
+        std::cout << "[STORAGE] Deleted " << rids.size() << " row(s) from '" << table << "'." << std::endl;
         return true;
     }
 
@@ -277,6 +269,7 @@ public:
             appendWal(db, table, 'U', rid, new_row);
         }
         flushTable(db, table);
+        std::cout << "[STORAGE] Updated " << rids.size() << " row(s) in '" << table << "'." << std::endl;
         return true;
     }
 
