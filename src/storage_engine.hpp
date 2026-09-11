@@ -416,15 +416,16 @@ public:
         std::cout << "]" << std::endl;
         return true;
     }
-
-    // Доп. задание 1: темпоральная персистентность.
-    // REVERT [table] [yyyy.mm.dd-hh:mm:ss.msmsms];
-    // Восстанавливает состояние таблицы на заданный момент времени, реплеем
-    // журнала операций (WAL): INSERT/UPDATE/DELETE, которые пишутся туда при
-    // каждом изменении данных (см. appendWal). Полное копирование файлов БД
-    // (snapshot) НЕ используется - меняется только содержимое .dat/.idx на
-    // основе результата реплея лога, сам .wal при этом не трогается, так что
-    // повторный REVERT к более ранней точке остаётся возможным.
+    /*
+    Доп. задание 1: темпоральная персистентность.
+    REVERT [table] [yyyy.mm.dd-hh:mm:ss.msmsms];
+    Восстанавливает состояние таблицы на заданный момент времени, реплеем
+    журнала операций (WAL): INSERT/UPDATE/DELETE, которые пишутся туда при
+    каждом изменении данных (см. appendWal). Полное копирование файлов БД
+    (snapshot) НЕ используется - меняется только содержимое .dat/.idx на
+    основе результата реплея лога, сам .wal при этом не трогается, так что
+    повторный REVERT к более ранней точке остаётся возможным.
+    */
     bool revertTable(const std::string& db, const std::string& table, const std::string& timestamp_str) {
         clearError();
         Table* t = findTable(db, table);
@@ -437,8 +438,6 @@ public:
             return false;
         }
 
-        // 1) Реплеим лог операций до cutoff включительно, восстанавливая
-        //    логическое состояние таблицы: rid -> актуальные значения строки.
         std::map<uint64_t, std::vector<Value>> target;
         {
             std::ifstream wal(walPath(db, table));
@@ -473,7 +472,7 @@ public:
                 for (size_t i = 0; i < ncols && (5 + i) < parts.size(); ++i) {
                     row.push_back(decodeValueForWal(parts[5 + i]));
                 }
-                target[key] = std::move(row); // актуально и для I, и для U
+                target[key] = std::move(row);
             }
         }
 
@@ -504,14 +503,9 @@ public:
             t->indexes[col.name] = std::move(index);
         }
 
-        // 3) Материализуем восстановленное состояние в порядке возрастания
-        //    исходного (старого) RID - на свежесозданном heap-файле это даёт
-        //    физический порядок слотов, совпадающий с исходным порядком
-        //    вставки. Это не пользовательская операция, а разворачивание уже
-        //    записанной истории, поэтому в WAL заново не пишем.
         for (auto& item : target) {
             auto& row = item.second;
-            if (row.size() != t->columns.size()) continue; // защита от рассинхронизации схемы
+            if (row.size() != t->columns.size()) continue;
             RecordId new_rid = t->records->insert_record(row, makeSchema(*t));
             if (!new_rid.is_valid()) continue;
             for (const auto& col : t->columns) {
@@ -773,7 +767,6 @@ private:
     std::vector<RecordId> matchingRecords(const Table& table, const Condition& cond, bool has_where) const {
         if (!has_where || !cond.root) return table.records->scan_all_records();
 
-        // Попытка оптимизации через индекс (только для простых листьев)
         if (cond.root->type == ConditionNode::COMPARISON) {
             const auto& node = *cond.root;
             if (node.left.is_column && !node.right.is_column && !node.right.value.is_null()) {
@@ -791,7 +784,7 @@ private:
                             if (node.op == CondOp::GT) { low = Value::make_int(v == INT64_MAX ? INT64_MAX : v + 1); high = Value::make_int(INT64_MAX); }
                             else if (node.op == CondOp::LTE) { high = Value::make_int(v == INT64_MAX ? INT64_MAX : v + 1); low = Value::make_int(INT64_MIN); }
                             else if (node.op == CondOp::LT) { high = Value::make_int(v); low = Value::make_int(INT64_MIN); }
-                            else high = Value::make_int(INT64_MAX); // GTE
+                            else high = Value::make_int(INT64_MAX);
                             return idx->range_find(low, high);
                         }
                         if (low.type() == Value::Type::STRING) {
@@ -799,7 +792,7 @@ private:
                             if (node.op == CondOp::GT) low = Value::make_string(low.as_string() + std::string(1, '\0'));
                             else if (node.op == CondOp::LTE) { high = Value::make_string(low.as_string() + std::string(1, '\0')); low = Value::make_string(""); }
                             else if (node.op == CondOp::LT) { high = low; low = Value::make_string(""); }
-                            else high = Value::make_string(max_string); // GTE
+                            else high = Value::make_string(max_string);
                             return idx->range_find(low, high);
                         }
                     }
