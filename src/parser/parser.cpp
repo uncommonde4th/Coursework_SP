@@ -4,7 +4,7 @@
 
 namespace sysdb {
 
-Parser::Parser(StorageStub& storage) : storage_(storage), current_pos_(0) {}
+Parser::Parser(StorageEngine& storage) : storage_(storage), current_pos_(0) {}
 
 Token Parser::peek() {
     if (current_pos_ < tokens_.size()) return tokens_[current_pos_];

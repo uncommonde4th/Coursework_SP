@@ -1,5 +1,5 @@
-#ifndef STORAGE_STUB_HPP
-#define STORAGE_STUB_HPP
+#ifndef STORAGE_ENGINE_HPP
+#define STORAGE_ENGINE_HPP
 
 #include <algorithm>
 #include <cctype>
@@ -24,9 +24,9 @@
 
 namespace sysdb {
 
-class StorageStub {
+class StorageEngine {
 public:
-    StorageStub() : root_("sysdb_data") {
+    StorageEngine() : root_("sysdb_data") {
         std::filesystem::create_directories(root_);
         loadMetadata();
     }
@@ -915,4 +915,4 @@ private:
 
 } // namespace sysdb
 
-#endif // STORAGE_STUB_HPP
+#endif // STORAGE_ENGINE_HPP

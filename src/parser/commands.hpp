@@ -157,7 +157,7 @@ namespace sysdb {
     // REVERT [table_name] [yyyy.mm.dd-hh:mm:ss.msmsms]; (доп. задание 1)
     struct RevertCmd : public Command {
         std::string table_name;
-        std::string timestamp; // хранится как есть, разбор - в StorageStub
+        std::string timestamp; // хранится как есть, разбор - в StorageEngine
         CommandType getType() const override { return CommandType::REVERT_CMD; }
     };
 

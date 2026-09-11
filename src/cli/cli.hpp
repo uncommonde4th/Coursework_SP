@@ -31,7 +31,7 @@ private:
     void printMetrics();
 
     std::string current_database_;
-    sysdb::StorageStub storage_;
+    sysdb::StorageEngine storage_;
     sysdb::Parser parser_;
 };
 

@@ -48,7 +48,7 @@ private:
     mutable std::mutex mutex_;
     uint32_t next_page_id_ = 0;   // счётчик страниц на диске (не зависит от кэша)
     
-    // Кэш страниц (простая реализация без LRU для начала)
+    // Кэш страниц
     mutable std::unordered_map<uint32_t, Page> page_cache_;
     
     // Вспомогательные методы

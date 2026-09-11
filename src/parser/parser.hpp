@@ -11,7 +11,7 @@ namespace sysdb {
 
     class Parser {
     public:
-        explicit Parser(StorageStub& storage);
+        explicit Parser(StorageEngine& storage);
 
         CommandPtr parse(const std::vector<Token>& tokens);
 
@@ -19,7 +19,7 @@ namespace sysdb {
         bool hasError() const { return !error_.empty(); }
 
     private:
-        StorageStub& storage_;
+        StorageEngine& storage_;
         std::vector<Token> tokens_;
         size_t current_pos_;
         std::string error_;
