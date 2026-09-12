@@ -116,7 +116,6 @@ namespace sysdb {
         ConditionPtr root;
         bool isEmpty() const { return root == nullptr; }
     };
-    // ============================================================
 
     struct DeleteCmd : public Command {
         std::string table_name;
@@ -144,7 +143,6 @@ namespace sysdb {
         bool is_star = false;   // Флаг для SELECT *
         AggFunc agg = AggFunc::NONE; // Тип агрегатной функции
     };
-    // ============================================================
 
     struct SelectCmd : public Command {
         std::string table_name;

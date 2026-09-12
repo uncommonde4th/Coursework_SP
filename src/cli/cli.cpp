@@ -91,9 +91,7 @@ void CLI::runInteractive() {
         // Автодобавление ; если команда начинается с буквы, еще не имеет ';'
         // на конце, И при этом скобки уже сбалансированы. Последнее условие
         // критично: без него многострочный CREATE TABLE (со скобкой,
-        // открытой на первой строке и закрытой через несколько строк) обрывался
-        // прямо на первой строке, а последующие строки колонок разбирались
-        // как отдельные "неизвестные команды" - именно так и проявлялся баг.
+        // открытой на первой строке и закрытой через несколько строк) обрывался прямо на первой строке
         if (accumulated_command.back() != ';' && startsWithLetter(accumulated_command)
             && parenBalance(accumulated_command) <= 0) {
             // Для интерактивного режима автоматически завершаем однострочные команды
@@ -185,7 +183,7 @@ std::vector<std::string> CLI::splitStatements(const std::string& input) {
 }
 
 void CLI::executeSingleStatement(const std::string& command) {
-    // Защита от пустых / мусорных команд
+    // Защита от пустых/мусорных команд
     {
         std::string stripped = command;
         stripped.erase(std::remove_if(stripped.begin(), stripped.end(),
